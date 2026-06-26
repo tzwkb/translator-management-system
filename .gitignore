@@ -1,0 +1,25 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+.venv/
+venv/
+
+# Secrets & runtime data — NEVER commit
+.key
+*.key
+.env
+*.env
+app.db
+*.db
+*.sqlite*
+*.log
+
+# Internal materials & business docs (kept private)
+素材/
+docs/
+
+# OS
+.DS_Store
+**/.DS_Store
