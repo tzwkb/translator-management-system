@@ -67,7 +67,8 @@
   .empty { text-align:center; color:var(--muted); padding:34px; }
   .summary { padding:14px 22px; display:flex; flex-wrap:wrap; gap:6px 22px; }
   .summary .kv { font-size:13px; } .summary .kv b { color:var(--muted); font-weight:500; margin-right:5px; }
-  .subtabs { display:flex; gap:2px; padding:0 16px; background:var(--slate); border-top:1px solid var(--line); }
+  .subtab { flex-shrink:0; }
+.subtabs { overflow-x:auto; display:flex; display:flex; gap:2px; padding:0 16px; background:var(--slate); border-top:1px solid var(--line); }
   .subtab { padding:8px 13px; cursor:pointer; border:none; background:none; font-size:13px; color:var(--muted); border-bottom:2px solid transparent; }
   .subtab.on { color:var(--ink); font-weight:600; border-bottom-color:var(--green); }
   #detailBody { padding:14px 22px; min-height:120px; }
@@ -227,7 +228,7 @@
     <div class="field"><label>结算月 <span class="req">*</span></label><input id="p-settlement_month" placeholder="2026-06"></div>
     <div class="field"><label>项目</label><input id="p-project"></div>
     <div class="field"><label>角色</label><select id="p-role"><option>翻译</option><option>审校</option><option>MTPE</option><option>LQA</option><option>LQE</option><option>其他</option></select></div>
-    <div class="field"><label>字数（千字）/ 工时</label><input id="p-word_count" type="number" step="0.1"></div>
+    <div class="field"><label>字数（字）/ 工时</label><input id="p-word_count" type="number" step="1"></div>
     <div class="field"><label>单价</label><input id="p-rate" type="number" step="1"></div>
     <div class="field"><label>币种</label><select id="p-currency"><option>CNY</option><option>USD</option><option>EUR</option></select></div>
     <div class="field"><label>状态</label><select id="p-status"><option>未开票</option><option>已开票待付</option><option>已支付</option><option>有争议</option></select></div>
@@ -372,7 +373,7 @@ async function importLQE(input) {
 }
 
 /* ---- 详情 + 子表 ---- */
-const SUBS = [["rate","报价变更"],["quality","质量记分"],["contracts","合同"],["payment","支付信息"],["complaints","客诉"],["capacity","产能"]];
+const SUBS = [["lang","语言对"],["rate","报价变更"],["quality","质量记分"],["contracts","合同"],["payment","支付信息"],["complaints","客诉"],["capacity","产能"]];
 function openDetail(id) {
   CUR = DATA.find(x=>x.id===id);
   document.getElementById("dTitle").textContent = CUR.name + " · 详情";
@@ -394,16 +395,33 @@ function openDetail(id) {
       ].map(_kv).join("");
   document.getElementById("dSubtabs").innerHTML = SUBS.map(([k,l],idx) =>
     `<button class="subtab ${idx===0?"on":""}" data-k="${k}" onclick="showSub('${k}')">${l}</button>`).join("");
-  showSub("rate");
+  showSub("lang");
   document.getElementById("detailMask").classList.add("open");
 }
 function showSub(k) {
   document.querySelectorAll("#dSubtabs .subtab").forEach(b => b.classList.toggle("on", b.dataset.k===k));
-  ({rate:subRate, quality:subQuality, contracts:subContracts, payment:subPayment, complaints:subComplaints, capacity:subCapacity}[k])();
+  ({lang:subLang, rate:subRate, quality:subQuality, contracts:subContracts, payment:subPayment, complaints:subComplaints, capacity:subCapacity}[k])();
 }
 function tbl(headers, bodyHtml) {
   return `<table class="mini"><thead><tr>${headers.map(h=>`<th>${h}</th>`).join("")}</tr></thead><tbody>${bodyHtml || `<tr><td colspan="${headers.length}" class="muted" style="padding:12px">暂无记录</td></tr>`}</tbody></table>`;
 }
+async function subLang() {
+  const list = await get(`/api/translators/${CUR.id}/language-pairs`);
+  const rows = list.map(c=>`<tr><td>${esc(c.source_lang)}</td><td>${esc(c.target_lang)}</td></tr>`).join("");
+  document.getElementById("detailBody").innerHTML = tbl(["源","目标"], rows) + `
+    <div class="addrow edit-only">
+      <input id="la-src" style="width:70px" placeholder="ZH"> → <input id="la-tgt" style="width:70px" placeholder="EN">
+      <button class="btn-primary" onclick="addLang()">添加</button>
+    </div>`;
+}
+async function addLang() {
+  const src = document.getElementById("la-src").value.trim();
+  const tgt = document.getElementById("la-tgt").value.trim();
+  if (!src||!tgt) return;
+  await api("POST", `/api/translators/${CUR.id}/language-pairs`, {source_lang:src, target_lang:tgt});
+  subLang(); CUR=DATA.find(x=>x.id===CUR.id); load();
+}
+
 async function subRate() {
   const list = await get(`/api/translators/${CUR.id}/rate-changes`);
   const rows = list.map(c=>`<tr><td>${esc(c.change_date)}</td><td>${esc(c.task_type)||"—"}</td><td>${c.original_rate??"—"} <span class="arrow">→</span> <b>${c.new_rate??"—"}</b></td><td>${esc(c.negotiator)||"—"}</td><td>${esc(c.reason)||"—"}</td><td>${esc(c.remarks)||"—"}</td></tr>`).join("");
@@ -524,7 +542,7 @@ async function subCapacity() {
       <div class="field"><label>占用%</label><input id="cp-occ" type="number" value="50" style="width:70px"></div>
       <button class="btn-primary" onclick="addCapacity()">添加</button>
     </div>
-    <div class="muted" style="font-size:12px;margin-top:8px">可用率 = 100 − 该周各项目占用之和（PRD §5.2）；超 100% 标红。利用率口径待 PM 确认，暂不计算。</div>`;
+    <div class="muted" style="font-size:12px;margin-top:8px">可用率 = 100 − 该周各项目占用之和（PRD §5.2）；超 100% 标红。</div>`;
 }
 async function addCapacity() {
   const b = {period_year:num("cp-y"), period_month:num("cp-m"), week_no:num("cp-w"), project:val("cp-proj"), occupancy_pct:num("cp-occ")||0};

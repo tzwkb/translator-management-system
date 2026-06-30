@@ -6,7 +6,8 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from ..db import engine
-from ..models import (Capacity, Complaint, Contract, PaymentInfo, QualityScore,
+from ..models import (Capacity, Complaint, Contract, LanguagePair, PaymentInfo,
+                      QualityScore,
                       RateChange, Translator)
 from ..schemas import (CapacityIn, ComplaintIn, ContractIn, PaymentIn, QualityIn,
                        RateChangeIn, TranslatorIn)
@@ -21,7 +22,17 @@ router = APIRouter(prefix="/api")
 def list_translators():
     with Session(engine) as s:
         rows = s.scalars(select(Translator).where(Translator.deleted_at.is_(None)).order_by(Translator.id)).all()
-        return [r.as_dict() for r in rows]
+        tids = [r.id for r in rows]
+        lp_map = {}
+        if tids:
+            lps = s.scalars(select(LanguagePair).where(LanguagePair.translator_id.in_(tids)).order_by(LanguagePair.id)).all()
+            for lp in lps:
+                lp_map.setdefault(lp.translator_id, []).append(f"{lp.source_lang}→{lp.target_lang}")
+        result = []
+        for r in rows:
+            r._cached_lp = ", ".join(lp_map.get(r.id, []))
+            result.append(r.as_dict())
+        return result
 
 
 @router.post("/translators")
@@ -124,6 +135,41 @@ def add_contract(tid: int, body: ContractIn, who: str = Depends(require_editor))
         return {"ok": True}
 
 
+# ---------------- 语言对 ----------------
+@router.get("/translators/{tid}/language-pairs")
+def list_language_pairs(tid: int):
+    with Session(engine) as s:
+        rows = s.scalars(select(LanguagePair).where(LanguagePair.translator_id == tid).order_by(LanguagePair.id)).all()
+        return [r.as_dict() for r in rows]
+
+
+@router.post("/translators/{tid}/language-pairs")
+def add_language_pair(tid: int, body: dict, who: str = Depends(require_editor)):
+    with Session(engine) as s:
+        get_translator(s, tid)
+        lp = LanguagePair(translator_id=tid, source_lang=body.get("source_lang",""), target_lang=body.get("target_lang",""))
+        s.add(lp)
+        audit(s, who, "新增", "语言对", tid, f"{lp.source_lang}→{lp.target_lang}")
+        resync_translator(s, tid)
+        s.commit()
+        s.refresh(lp)
+        return lp.as_dict()
+
+
+@router.delete("/translators/{tid}/language-pairs/{lpid}")
+def delete_language_pair(tid: int, lpid: int, who: str = Depends(require_editor)):
+    with Session(engine) as s:
+        get_translator(s, tid)
+        lp = s.get(LanguagePair, lpid)
+        if not lp or lp.translator_id != tid:
+            raise HTTPException(404, "该语言对不存在")
+        s.delete(lp)
+        audit(s, who, "删除", "语言对", tid, f"{lp.source_lang}→{lp.target_lang}")
+        resync_translator(s, tid)
+        s.commit()
+        return {"ok": True}
+
+
 # ---------------- 客诉 ----------------
 @router.get("/translators/{tid}/complaints")
 def list_complaints(tid: int):
@@ -144,7 +190,7 @@ def add_complaint(tid: int, body: ComplaintIn, who: str = Depends(require_editor
         return {"ok": True}
 
 
-# ---------------- 产能（占用 + 可用率；利用率待 PM）----------------
+# ---------------- 产能（占用 + 可用率；利用率字段已删 0629）----------------
 @router.get("/translators/{tid}/capacity")
 def list_capacity(tid: int):
     with Session(engine) as s:

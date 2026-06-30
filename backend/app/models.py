@@ -80,7 +80,7 @@ class Translator(Base):
 
     # 人录入字段（新增/编辑表单可填）
     EDITABLE = ("name", "wechat", "email", "location", "timezone", "native_language",
-                "onboarding_date", "status", "source", "language_pairs", "translation_rate",
+                "onboarding_date", "status", "source", "translation_rate",
                 "mtpe_rate", "review_rate", "lqa_rate", "rate_confirmed_date", "domains",
                 "text_types", "cat_tools", "internal_rating", "trial_result", "current_project",
                 "role", "daily_output", "weekend_off", "availability", "currency",
@@ -91,7 +91,7 @@ class Translator(Base):
     DERIVED = ("recent_qa_score", "cumulative_qa_score", "low_error_count", "low_error_rate",
                "complaint_count", "deduction_total", "negotiation_status", "last_negotiation_date",
                "post_negotiation_rate", "rate_reduction_pct", "accepted_reduction",
-               "negotiation_notes", "cumulative_unpaid", "cumulative_word_count")
+               "negotiation_notes", "cumulative_unpaid", "cumulative_word_count", "language_pairs")
 
     def as_dict(self):
         return {
@@ -99,7 +99,7 @@ class Translator(Base):
             "location": self.location, "timezone": self.timezone,
             "native_language": self.native_language, "onboarding_date": self.onboarding_date,
             "status": self.status, "source": self.source,
-            "language_pairs": self.language_pairs, "translation_rate": _f(self.translation_rate),
+            "language_pairs": getattr(self, "_cached_lp", None) or self.language_pairs or "", "translation_rate": _f(self.translation_rate),
             "mtpe_rate": _f(self.mtpe_rate), "review_rate": _f(self.review_rate),
             "lqa_rate": _f(self.lqa_rate), "rate_confirmed_date": self.rate_confirmed_date,
             "domains": self.domains, "text_types": self.text_types, "cat_tools": self.cat_tools,
@@ -271,6 +271,18 @@ class PaymentInfo(Base):
                 "id_card": ic if reveal else mask(ic),
                 "payee_name": self.payee_name, "supports_wechat": self.supports_wechat,
                 "remarks": self.remarks}
+
+
+class LanguagePair(Base):
+    __tablename__ = "language_pairs"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    translator_id: Mapped[int] = mapped_column(ForeignKey("translators.id"), index=True)
+    source_lang: Mapped[str] = mapped_column(String(20))
+    target_lang: Mapped[str] = mapped_column(String(20))
+
+    def as_dict(self):
+        return {"id": self.id, "translator_id": self.translator_id,
+                "source_lang": self.source_lang, "target_lang": self.target_lang}
 
 
 class AuditLog(Base):

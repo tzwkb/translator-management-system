@@ -11,8 +11,8 @@ PO_STATUSES = ["未开票", "已开票待付", "已支付", "有争议"]
 
 
 def expected_amount(word_count, rate):
-    """PO 金额口径：字数 × 单价，2 位小数。"""
-    return round((word_count or 0) * (rate or 0), 2)
+    """PO 金额口径：字数 ÷ 1000 × 单价（词数按字、费率按元/千字），2 位小数。"""
+    return round((word_count or 0) / 1000 * (rate or 0), 2)
 
 
 def get_translator(s, tid):
@@ -49,7 +49,7 @@ def resync_translator(s, tid):
     t.cumulative_word_count = int(sum(float(p.word_count or 0) for p in pos))
     t.cumulative_unpaid = round(sum(float(p.amount or 0) for p in pos if p.status in ("未开票", "已开票待付")), 2)
     # 低错率 §6.3.3 = 低错数 / 累计字数(千)。约定 PO 词数单位=千字，故直接相除；若 PM 定为字需 /1000
-    t.low_error_rate = round(t.low_error_count / t.cumulative_word_count, 4) if t.cumulative_word_count else None
+    t.low_error_rate = round(t.low_error_count / (t.cumulative_word_count / 1000), 4) if t.cumulative_word_count else None
     # 客诉 §12.3.2：次数 / 累计扣款
     cs = s.scalars(select(Complaint).where(Complaint.translator_id == tid)).all()
     t.complaint_count = len(cs)
