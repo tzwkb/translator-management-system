@@ -1,7 +1,11 @@
 # 译员管理系统
 
-[English](README.md) | 中文
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![Agent Skill](https://img.shields.io/badge/Agent%20Skill-Codex-blue.svg)](SKILL.md)
+[![Python](https://img.shields.io/badge/Python-3.x-blue.svg)](https://www.python.org/)
+[![FastAPI](https://img.shields.io/badge/FastAPI-framework-009688.svg)](https://fastapi.tiangolo.com/)
 
+[English](README.md) | 中文
 
 译员全生命周期 + 结算管理系统。后端 FastAPI + SQLite，前端单文件 HTML，配套一个自动化 skill。
 
