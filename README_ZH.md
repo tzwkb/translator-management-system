@@ -1,6 +1,6 @@
 # 译员管理系统
 
-中文 | [English](README.md)
+[English](README.md) | 中文
 
 
 译员全生命周期 + 结算管理系统。后端 FastAPI + SQLite，前端单文件 HTML，配套一个自动化 skill。
