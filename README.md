@@ -21,14 +21,6 @@ English | [中文](README_ZH.md)
 
  Configure the database and run the backend/frontend according to the README startup notes.
 
-## Status
-
- This repository is maintained or used according to the current README notes.
-
 ## Notes
 
  The repository targets business management workflows; data fields should match the actual translator-management policy.
-
-## Detailed Technical Notes
-
-This README keeps the English version of the core documentation. Code blocks, paths, commands, and file-layout examples are kept literal so they can be copied and checked against the repository.
