@@ -3,7 +3,7 @@ from datetime import datetime
 from typing import Optional
 
 from sqlalchemy import (BigInteger, Boolean, DateTime, ForeignKey, Integer,
-                        LargeBinary, Numeric, String, Text)
+                        LargeBinary, Numeric, String, Text, UniqueConstraint)
 from sqlalchemy.orm import Mapped, mapped_column
 
 from .db import Base
@@ -131,6 +131,8 @@ class RateChange(Base):
     id: Mapped[int] = mapped_column(primary_key=True)
     translator_id: Mapped[int] = mapped_column(ForeignKey("translators.id"), index=True)
     change_date: Mapped[str] = mapped_column(String(20))
+    source_lang: Mapped[Optional[str]] = mapped_column(String(20))
+    target_lang: Mapped[Optional[str]] = mapped_column(String(20))
     task_type: Mapped[Optional[str]] = mapped_column(String(50))
     original_rate: Mapped[Optional[float]] = mapped_column(Numeric(10, 2))
     new_rate: Mapped[Optional[float]] = mapped_column(Numeric(10, 2))
@@ -141,6 +143,7 @@ class RateChange(Base):
 
     def as_dict(self):
         return {"id": self.id, "translator_id": self.translator_id, "change_date": self.change_date,
+                "source_lang": self.source_lang, "target_lang": self.target_lang,
                 "task_type": self.task_type,
                 "original_rate": _f(self.original_rate),
                 "new_rate": _f(self.new_rate),
@@ -154,6 +157,8 @@ class PO(Base):
     translator_id: Mapped[int] = mapped_column(ForeignKey("translators.id"), index=True)
     settlement_month: Mapped[str] = mapped_column(String(7), index=True)
     project: Mapped[Optional[str]] = mapped_column(String(200))
+    source_lang: Mapped[Optional[str]] = mapped_column(String(20))
+    target_lang: Mapped[Optional[str]] = mapped_column(String(20))
     role: Mapped[Optional[str]] = mapped_column(String(50))
     word_count: Mapped[Optional[float]] = mapped_column(Numeric(12, 2))
     rate: Mapped[Optional[float]] = mapped_column(Numeric(10, 2))
@@ -166,6 +171,7 @@ class PO(Base):
     def as_dict(self):
         return {"id": self.id, "translator_id": self.translator_id,
                 "settlement_month": self.settlement_month, "project": self.project, "role": self.role,
+                "source_lang": self.source_lang, "target_lang": self.target_lang,
                 "word_count": _f(self.word_count), "rate": _f(self.rate), "amount": _f(self.amount),
                 "currency": self.currency, "status": self.status, "po_number": self.po_number,
                 "remarks": self.remarks}
@@ -279,10 +285,21 @@ class LanguagePair(Base):
     translator_id: Mapped[int] = mapped_column(ForeignKey("translators.id"), index=True)
     source_lang: Mapped[str] = mapped_column(String(20))
     target_lang: Mapped[str] = mapped_column(String(20))
+    translation_rate: Mapped[Optional[float]] = mapped_column(Numeric(10, 2))
+    mtpe_rate: Mapped[Optional[float]] = mapped_column(Numeric(10, 2))
+    review_rate: Mapped[Optional[float]] = mapped_column(Numeric(10, 2))
+    lqa_rate: Mapped[Optional[float]] = mapped_column(Numeric(10, 2))
+    lqe_rate: Mapped[Optional[float]] = mapped_column(Numeric(10, 2))
+    currency: Mapped[Optional[str]] = mapped_column(String(10))
+    rate_confirmed_date: Mapped[Optional[str]] = mapped_column(String(20))
 
     def as_dict(self):
         return {"id": self.id, "translator_id": self.translator_id,
-                "source_lang": self.source_lang, "target_lang": self.target_lang}
+                "source_lang": self.source_lang, "target_lang": self.target_lang,
+                "translation_rate": _f(self.translation_rate), "mtpe_rate": _f(self.mtpe_rate),
+                "review_rate": _f(self.review_rate), "lqa_rate": _f(self.lqa_rate),
+                "lqe_rate": _f(self.lqe_rate), "currency": self.currency,
+                "rate_confirmed_date": self.rate_confirmed_date}
 
 
 class AuditLog(Base):
@@ -308,6 +325,21 @@ class PendingChange(Base):
     kind: Mapped[Optional[str]] = mapped_column(String(30))
     translator_id: Mapped[Optional[int]] = mapped_column(Integer)
     payload: Mapped[Optional[str]] = mapped_column(Text)
+    idempotency_key: Mapped[Optional[str]] = mapped_column(String(160))
+    request_hash: Mapped[Optional[str]] = mapped_column(String(64))
+    payload_hash: Mapped[Optional[str]] = mapped_column(String(64), index=True)
     status: Mapped[str] = mapped_column(String(20), default="pending")
     reviewed_by: Mapped[Optional[str]] = mapped_column(String(50))
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
+
+
+class PendingIdempotency(Base):
+    __tablename__ = "pending_idempotency"
+    __table_args__ = (UniqueConstraint("created_by", "idempotency_key",
+                                       name="uq_pending_idempotency_actor_key"),)
+    id: Mapped[int] = mapped_column(primary_key=True)
+    created_by: Mapped[str] = mapped_column(String(50))
+    idempotency_key: Mapped[str] = mapped_column(String(160))
+    request_hash: Mapped[Optional[str]] = mapped_column(String(64))
+    pending_change_id: Mapped[int] = mapped_column(ForeignKey("pending_changes.id"), index=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)

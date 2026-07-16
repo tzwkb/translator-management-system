@@ -76,9 +76,12 @@ def seed():
                      status="即将到期"),
         ])
         s.add_all([
-            LanguagePair(translator_id=i["张明"], source_lang="ZH", target_lang="EN"),
-            LanguagePair(translator_id=i["张明"], source_lang="ZH", target_lang="JA"),
-            LanguagePair(translator_id=i["李娜"], source_lang="ZH", target_lang="JA"),
+            LanguagePair(translator_id=i["张明"], source_lang="ZH", target_lang="EN",
+                         translation_rate=180, mtpe_rate=120, review_rate=90, currency="CNY"),
+            LanguagePair(translator_id=i["张明"], source_lang="ZH", target_lang="JA",
+                         translation_rate=210, mtpe_rate=140, review_rate=100, currency="CNY"),
+            LanguagePair(translator_id=i["李娜"], source_lang="ZH", target_lang="JA",
+                         translation_rate=220, lqa_rate=80, lqe_rate=90, currency="CNY"),
         ])
         s.commit()
         s.add_all([

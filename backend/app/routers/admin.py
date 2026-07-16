@@ -1,17 +1,19 @@
 """审计日志、导入导出接口。"""
 import io
-from datetime import date
+from datetime import date, datetime
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, UploadFile
 from fastapi.responses import StreamingResponse
+from pydantic import ValidationError
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from ..db import engine
-from ..models import AuditLog, LanguagePair, QualityScore, Translator
+from ..models import PO, AuditLog, LanguagePair, QualityScore, Translator
+from ..schemas import POIn, TranslatorIn
 from ..security import require_editor
-from ..services import audit, resync_translator
+from ..services import audit, resync_translator, svc_create_po
 
 router = APIRouter(prefix="/api")
 
@@ -29,11 +31,6 @@ IMPORT_FIELDS = [
     ("状态", "status", False, ["Active", "Dormant", "Blacklisted", "Probation"]),
     ("来源", "source", False, None),
     ("语言对", "language_pairs", False, None),
-    ("翻译费率", "translation_rate", False, None),
-    ("MTPE费率", "mtpe_rate", False, None),
-    ("审校费率", "review_rate", False, None),
-    ("LQA费率", "lqa_rate", False, None),
-    ("报价确认日", "rate_confirmed_date", False, None),
     ("擅长领域", "domains", False, None),
     ("文本类型", "text_types", False, None),
     ("CAT工具", "cat_tools", False, None),
@@ -60,11 +57,61 @@ IMPORT_FIELDS = [
 _HEADER_MAP = {lbl: f for lbl, f, _, _ in IMPORT_FIELDS}
 _HEADER_MAP.update({f: f for _, f, _, _ in IMPORT_FIELDS})   # 英文字段名也认
 _BOOL_FIELDS = {"weekend_off", "nda_signed"}
-_DATE_FIELDS = {"onboarding_date", "rate_confirmed_date", "contract_expiry", "last_contact"}
+_DATE_FIELDS = {"onboarding_date", "contract_expiry", "last_contact"}
+_PO_HEADER_MAP = {
+    "translator_id": "translator_id", "译员ID": "translator_id", "译员id": "translator_id", "ID": "translator_id",
+    "translator": "translator_name", "translator_name": "translator_name", "译员": "translator_name", "姓名": "translator_name",
+    "settlement_month": "settlement_month", "结算月": "settlement_month", "月份": "settlement_month", "年月": "settlement_month",
+    "project": "project", "项目": "project",
+    "source_lang": "source_lang", "源语言": "source_lang", "源语": "source_lang",
+    "target_lang": "target_lang", "目标语言": "target_lang", "目标语": "target_lang",
+    "role": "role", "任务类型": "role", "类型": "role", "角色": "role",
+    "word_count": "word_count", "字数": "word_count", "字数（字）": "word_count", "字符数": "word_count",
+    "rate": "rate", "单价": "rate", "单价（/千字）": "rate", "费率": "rate",
+    "currency": "currency", "币种": "currency",
+    "status": "status", "状态": "status",
+    "po_number": "po_number", "PO号": "po_number", "PO 号": "po_number", "po_number": "po_number",
+    "remarks": "remarks", "备注": "remarks",
+}
 
 
 def _norm_header(c):
     return str(c).replace("（必填）", "").replace("*", "").strip() if c is not None else ""
+
+
+def _norm_month_value(v):
+    if isinstance(v, (datetime, date)):
+        return v.strftime("%Y-%m")
+    s = str(v).strip()
+    return s[:7] if len(s) >= 7 else s
+
+
+def _blank(v):
+    return v is None or (isinstance(v, str) and not v.strip())
+
+
+def _find_translator_id(s: Session, raw_id, raw_name):
+    if not _blank(raw_id):
+        try:
+            tid = int(raw_id)
+        except (TypeError, ValueError):
+            raise ValueError("译员ID不是整数") from None
+        t = s.get(Translator, tid)
+        if not t or t.deleted_at:
+            raise ValueError("译员ID不存在")
+        return tid
+    if _blank(raw_name):
+        raise ValueError("缺译员")
+    name = str(raw_name).strip()
+    rows = s.scalars(select(Translator).where(Translator.deleted_at.is_(None))).all()
+    matches = [t for t in rows if t.name == name]
+    if not matches:
+        matches = [t for t in rows if t.name and (t.name in name or name in t.name)]
+    if not matches:
+        raise ValueError("译员不存在")
+    if len(matches) > 1:
+        raise ValueError("译员匹配不唯一")
+    return matches[0].id
 
 
 # ---------------- 审计 ----------------
@@ -106,10 +153,10 @@ def import_translators(file: UploadFile, who: str = Depends(require_editor)):
     if not rows:
         return {"imported": 0}
     header = [_norm_header(c) for c in rows[0]]
-    n, skipped = 0, 0
+    n, skipped, invalid_rows = 0, 0, []
     with Session(engine) as s:
         existing = {e for (e,) in s.execute(select(Translator.email).where(Translator.deleted_at.is_(None))).all() if e}
-        for r in rows[1:]:
+        for row_no, r in enumerate(rows[1:], start=2):
             data = {}
             for col, val in zip(header, r):
                 f = _HEADER_MAP.get(col)
@@ -122,17 +169,25 @@ def import_translators(file: UploadFile, who: str = Depends(require_editor)):
                 data[f] = val
             if not data.get("name"):
                 continue
+            data["name"] = str(data["name"])
+            data.setdefault("status", "Active")
+            try:
+                clean = TranslatorIn(**data).model_dump()
+            except ValidationError as e:
+                invalid_rows.append({
+                    "row": row_no,
+                    "error": "；".join(f"{'.'.join(map(str, err['loc']))}: {err['msg']}" for err in e.errors(include_url=False)),
+                })
+                continue
             email = data.get("email")
             if email and email in existing:
                 skipped += 1
                 continue
-            data["name"] = str(data["name"])
-            data.setdefault("status", "Active")
-            t = Translator(**data)
+            t = Translator(**clean)
             s.add(t)
             s.flush()
             # 语言对：把逗号分隔串拆成子表行
-            lp_str = data.get("language_pairs")
+            lp_str = clean.get("language_pairs")
             if lp_str:
                 for pair in str(lp_str).split(","):
                     p = pair.strip()
@@ -142,9 +197,62 @@ def import_translators(file: UploadFile, who: str = Depends(require_editor)):
             if email:
                 existing.add(email)
             n += 1
-        audit(s, who, "导入", "译员", None, f"{n} 条(跳过重复{skipped})")
+        audit(s, who, "导入", "译员", None, f"{n} 条(跳过重复{skipped}，格式错误{len(invalid_rows)})")
         s.commit()
-    return {"imported": n, "skipped_dup_email": skipped}
+    return {"imported": n, "skipped_dup_email": skipped, "invalid_rows": invalid_rows}
+
+
+@router.post("/import/po")
+def import_po(file: UploadFile, who: str = Depends(require_editor)):
+    """导入标准 PO/结算表；支持译员姓名或 ID，重复 PO 号跳过，错误行返回明细。"""
+    from openpyxl import load_workbook
+    wb = load_workbook(io.BytesIO(file.file.read()), data_only=True)
+    ws = wb.active
+    rows = list(ws.iter_rows(values_only=True))
+    if not rows:
+        return {"imported": 0, "skipped_dup_po": 0, "invalid_rows": []}
+    header = [_norm_header(c) for c in rows[0]]
+    imported, skipped_dup_po, invalid_rows = 0, 0, []
+    with Session(engine) as s:
+        existing_po = {p for (p,) in s.execute(select(PO.po_number)).all() if p}
+        for row_no, r in enumerate(rows[1:], start=2):
+            raw = {}
+            for col, val in zip(header, r):
+                f = _PO_HEADER_MAP.get(col)
+                if not f or _blank(val):
+                    continue
+                if f == "settlement_month":
+                    val = _norm_month_value(val)
+                raw[f] = val
+            if not raw:
+                continue
+            try:
+                data = {k: v for k, v in raw.items() if k != "translator_name"}
+                data["translator_id"] = _find_translator_id(s, raw.get("translator_id"), raw.get("translator_name"))
+                if data.get("po_number") and str(data["po_number"]).strip() in existing_po:
+                    skipped_dup_po += 1
+                    continue
+                if data.get("po_number") is not None:
+                    data["po_number"] = str(data["po_number"]).strip()
+                clean = POIn(**data).model_dump()
+                p = svc_create_po(s, clean, who)
+                if p.po_number:
+                    existing_po.add(p.po_number)
+                imported += 1
+            except (ValidationError, ValueError, HTTPException) as e:
+                if isinstance(e, ValidationError):
+                    msg = "；".join(
+                        f"{'.'.join(map(str, err['loc']))}: {err['msg']}"
+                        for err in e.errors(include_url=False)
+                    )
+                elif isinstance(e, HTTPException):
+                    msg = str(e.detail)
+                else:
+                    msg = str(e)
+                invalid_rows.append({"row": row_no, "error": msg})
+        audit(s, who, "导入", "PO", None, f"{imported} 条(跳过重复{skipped_dup_po}，格式错误{len(invalid_rows)})")
+        s.commit()
+    return {"imported": imported, "skipped_dup_po": skipped_dup_po, "invalid_rows": invalid_rows}
 
 
 @router.post("/import/lqe")

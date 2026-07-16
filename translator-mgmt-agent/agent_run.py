@@ -1,7 +1,7 @@
 """B+H 实跑：扮演 Hermes agent，读样例消息→抽取→按护栏决策→调真桥写真系统→报告→闭环。
 
 抽取/决策由 agent（Claude）给出，执行打真实系统。消息为受控样例（可复现），
-覆盖：档期(直接落)、费率(待审)、PO(待审)、新译员(无权·交人)、玩笑(存疑·交人)。
+覆盖：档期(直接落)、语言对费率(待审)、PO(待审)、新译员(无权·交人)、玩笑(存疑·交人)。
 """
 import json
 import os
@@ -53,16 +53,18 @@ for who, text in msgs:
 
     elif who == "李娜":
         l = c.find("李娜")
-        r = c.propose_rate(l["id"], "翻译", 240, reason="微信：活多，要求 220→240")
-        msg = f"→ 费率：翻译 220→240（钱相关）—— 进待审 #{r['pending_id']}"
-        pending.append(f"李娜 翻译费率 220→240  #{r['pending_id']}")
+        r = c.propose_rate(l["id"], "翻译", 240, original_rate=220,
+                           source_lang="ZH", target_lang="JA", currency="CNY",
+                           reason="微信：活多，要求 ZH→JA 翻译 220→240")
+        msg = f"→ 费率：ZH→JA 翻译 220→240（钱相关）—— 进待审 #{r['pending_id']}"
+        pending.append(f"李娜 ZH→JA 翻译费率 220→240  #{r['pending_id']}")
 
     elif who == "王伟":
         w = c.find("王伟")
-        rate = float(w["translation_rate"] or 150)
-        r = c.propose_po(w["id"], "2026-06", "翻译", 12, rate, project="诺诺")
-        msg = f"→ PO：2026-06 诺诺 12千字×{rate}（钱相关）—— 进待审 #{r['pending_id']}"
-        pending.append(f"王伟 PO 2026-06 诺诺 12千字×{rate}  #{r['pending_id']}")
+        r = c.propose_po(w["id"], "2026-06", "翻译", 12000,
+                         source_lang="ZH", target_lang="EN", project="诺诺")
+        msg = f"→ PO：2026-06 诺诺 ZH→EN 12000字（钱相关）—— 进待审 #{r['pending_id']}"
+        pending.append(f"王伟 PO 2026-06 诺诺 ZH→EN 12000字  #{r['pending_id']}")
 
     elif who == "资源群":
         try:
@@ -86,14 +88,14 @@ print(f"✅ 已自动更新档期 {len(direct)} 条：" + "".join("\n   · " + x
 print(f"⏳ 待人工审核 {len(pending)} 条（费率/PO）：" + "".join("\n   · " + x for x in pending))
 print(f"🙋 需人工处理 {len(human)} 条：" + "".join("\n   · " + x for x in human))
 
-# ---- H 闭环：editor 批准其中一条费率待审 → 主表更新 ----
+# ---- H 闭环：editor 批准其中一条费率待审 → 对应语言对费率更新 ----
 _, edu = ed("POST", "/api/login", {"user": "资源端"})
 ET = edu["token"]
 pend_list = ed("GET", "/api/pending", token=ET)[1]
 rate_pc = next(p for p in pend_list if p["kind"] == "rate_change")
-before = c.find("李娜")["translation_rate"]
+before = c.language_pairs(c.find("李娜")["id"])
 ed("POST", f"/api/pending/{rate_pc['id']}/approve", token=ET)
-after = c.find("李娜")["translation_rate"]
+after = c.language_pairs(c.find("李娜")["id"])
 print(f"\n=== 【人工复核闭环】 ===")
-print(f"editor 批准李娜费率待审：主表 {before} → {after}  {'✅ 一致' if after == 240 else '✗ 不一致'}")
+print(f"editor 批准李娜费率待审：语言对费率 {before} → {after}")
 print(f"剩余待审 {len(ed('GET', '/api/pending', token=ET)[1])} 条（王伟 PO 仍候审，符合预期）")

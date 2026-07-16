@@ -67,10 +67,11 @@ chk("C2 档期落库可见", any(w["period"] == "2026-06 W4" for w in caps["week
 
 print("=== D 费率/PO 进待审 ===")
 rate0 = c.find("张明")["translation_rate"]
-pr = c.propose_rate(tid, "翻译", 260, reason="微信里译员要求")
+pr = c.propose_rate(tid, "翻译", 260, source_lang="ZH", target_lang="EN",
+                    currency="CNY", reason="微信里译员要求")
 chk("D1 费率→pending", pr.get("pending") is True)
 chk("D2 待审期间主表未变", c.find("张明")["translation_rate"] == rate0)
-ppo = c.propose_po(tid, "2026-07", "翻译", 8, 180)
+ppo = c.propose_po(tid, "2026-07", "翻译", 8000, source_lang="ZH", target_lang="EN")
 chk("D3 PO→pending", ppo.get("pending") is True)
 chk("D4 待审队列可见≥2", len(ed("GET", "/api/pending", token=ET)[1]) >= 2)
 
@@ -78,14 +79,16 @@ print("=== E 护栏与安全 ===")
 chk("E1 agent不能批准403", code(lambda: ed("POST", f"/api/pending/{pr['pending_id']}/approve", token=c.token)) == 403)
 chk("E2 agent不能建译员403", code(lambda: ed("POST", "/api/translators", {"name": "X", "native_language": "中", "onboarding_date": "2026-01-01"}, token=c.token)) == 403)
 chk("E3 agent不能加客诉403", code(lambda: ed("POST", f"/api/translators/{tid}/complaints", {"severity": "一般"}, token=c.token)) == 403)
-chk("E5 钱一律pending(无直落路径)", c.propose_rate(tid, "翻译", 300).get("pending") is True)
+chk("E5 钱一律pending(无直落路径)", c.propose_rate(tid, "翻译", 300, source_lang="ZH", target_lang="EN").get("pending") is True)
 
 print("=== F 人工复核闭环 ===")
 ed("POST", f"/api/pending/{pr['pending_id']}/approve", token=ET)
-chk("F1 批准后主表费率=260", c.find("张明")["translation_rate"] == 260)
+lps = c.language_pairs(tid)
+chk("F1 批准后ZH→EN语言对费率=260",
+    any(lp["source_lang"] == "ZH" and lp["target_lang"] == "EN" and lp["translation_rate"] == 260 for lp in lps))
 ed("POST", f"/api/pending/{ppo['pending_id']}/approve", token=ET)
 pos = ed("GET", "/api/po?month=2026-07")[1]
-chk("F3 批准后PO落库", any(p["translator_id"] == tid for p in pos))
+chk("F3 批准后PO落库", any(p["translator_id"] == tid and p["word_count"] == 8000 for p in pos))
 for pc in ed("GET", "/api/pending", token=ET)[1]:
     ed("POST", f"/api/pending/{pc['id']}/reject", token=ET)
 chk("F2 驳回后待审清空", len(ed("GET", "/api/pending", token=ET)[1]) == 0)

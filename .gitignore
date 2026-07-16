@@ -15,6 +15,7 @@ app.db
 *.db
 *.sqlite*
 *.log
+backend/data_quality_report.json
 
 # Internal materials & business docs (kept private)
 素材/
@@ -23,3 +24,6 @@ docs/
 # OS
 .DS_Store
 **/.DS_Store
+
+# Local design-session runtime
+.superpowers/

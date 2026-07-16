@@ -39,7 +39,7 @@ proj = "烟云VM测"  # 烟云VM测（中文，测往返）
 chk("C1 capacity direct ok", c.set_capacity(tid, 2026, 6, 5, proj, 50).get("ok") is True)
 caps = get("/api/translators/%d/capacity" % tid)
 chk("G2 chinese round-trip", any(r.get("project") == proj for r in caps["rows"]))
-pr = c.propose_rate(tid, "翻译", 188)  # 翻译
+pr = c.propose_rate(tid, "翻译", 188, source_lang="ZH", target_lang="EN")  # 翻译
 chk("D1 rate->pending from VM", pr.get("pending") is True)
 print("RESULT %d/%d" % (sum(ok), len(ok)))
 sys.exit(0 if all(ok) else 1)

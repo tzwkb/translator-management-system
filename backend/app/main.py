@@ -7,11 +7,12 @@ from fastapi.responses import FileResponse
 
 from . import config
 from . import models  # noqa: F401  确保模型注册到 Base
-from .db import Base, engine
+from .db import Base, engine, ensure_schema
 from .routers import router
 from .seed import seed
 
 Base.metadata.create_all(engine)
+ensure_schema()
 seed()
 
 app = FastAPI(title="译员管理系统")

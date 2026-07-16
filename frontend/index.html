@@ -55,23 +55,62 @@
   .expiry-warn,.amt-bad { color:var(--warn); font-weight:600; } .amt-bad { cursor:help; }
   .mask { position:fixed; inset:0; background:rgba(29,33,37,.45); display:none; align-items:flex-start; justify-content:center; padding-top:5vh; }
   .mask.open { display:flex; }
-  .modal { background:var(--paper); border-radius:10px; width:620px; max-width:94vw; max-height:88vh; overflow:auto; box-shadow:0 12px 40px rgba(29,33,37,.3); }
-  .modal.wide { width:760px; }
-  .modal h2 { margin:0; padding:15px 22px; background:var(--slate); font-size:16px; border-bottom:1px solid var(--line); }
+  .modal { --modal-box-width:min(620px,94vw); position:relative; background:var(--paper); border-radius:10px; width:var(--modal-box-width); max-height:88vh; overflow:auto; box-shadow:0 12px 40px rgba(29,33,37,.3); }
+  .modal.wide { --modal-box-width:min(980px,94vw); }
+  .modal h2 { margin:0; padding:15px 56px 15px 22px; background:var(--slate); font-size:16px; border-bottom:1px solid var(--line); }
+  .modal-close { position:fixed; top:calc(5vh + 9px); right:calc((100vw - var(--modal-box-width)) / 2 + 12px); z-index:3; width:32px; height:32px; display:inline-flex; align-items:center; justify-content:center; background:transparent; color:var(--muted); font-size:22px; line-height:1; }
+  .modal-close:hover { background:#fff; color:var(--ink); }
+  .modal-close:focus-visible { outline:2px solid var(--blue-d); outline-offset:2px; }
   .form { padding:16px 22px; display:grid; grid-template-columns:1fr 1fr; gap:12px 16px; }
   .field { display:flex; flex-direction:column; gap:4px; } .field.full { grid-column:1 / 3; }
   .field label { font-size:12px; color:#41484f; } .field label .req { color:var(--danger); }
   .field input,.field select,.field textarea { padding:7px 10px; border:1px solid var(--line); border-radius:6px; font-size:14px; font-family:inherit; background:#fff; }
   .field textarea { resize:vertical; min-height:46px; }
+  .lang-combo { position:relative; display:inline-flex; align-items:center; width:112px; max-width:100%; }
+  .field .lang-combo { width:100%; }
+  .lang-combo .lang-input { width:100%; padding-right:32px; }
+  .lang-trigger { position:absolute; top:1px; right:1px; bottom:1px; width:30px; padding:0; border-left:1px solid var(--line); border-radius:0 5px 5px 0; background:#f8fafc; color:var(--muted); font-size:11px; line-height:1; }
+  .lang-trigger:hover { background:var(--slate); color:var(--ink); }
+  .lang-menu { position:fixed; display:none; z-index:10000; max-height:220px; overflow:auto; border:1px solid var(--line); border-radius:7px; background:#fff; box-shadow:0 10px 26px rgba(29,33,37,.18); }
+  .lang-combo.open .lang-menu { display:block; }
+  .lang-option { display:block; width:100%; padding:7px 10px; border-radius:0; background:#fff; color:var(--ink); text-align:left; font-size:13px; font-family:inherit; }
+  .lang-option:hover,.lang-option:focus { background:#eef3f8; }
+  .lang-empty { padding:8px 10px; color:var(--muted); font-size:13px; }
   .actions { padding:13px 22px; display:flex; justify-content:flex-end; gap:10px; border-top:1px solid var(--line); }
   .empty { text-align:center; color:var(--muted); padding:34px; }
-  .summary { padding:14px 22px; display:flex; flex-wrap:wrap; gap:6px 22px; }
-  .summary .kv { font-size:13px; } .summary .kv b { color:var(--muted); font-weight:500; margin-right:5px; }
+  .summary { padding:16px 22px 18px; }
+  .profile-head { display:flex; justify-content:space-between; gap:16px; align-items:flex-start; margin-bottom:12px; }
+  .profile-name { font-size:18px; font-weight:700; margin-bottom:6px; }
+  .profile-meta { display:flex; flex-wrap:wrap; gap:6px; }
+  .chip { display:inline-flex; align-items:center; min-height:24px; padding:3px 9px; border:1px solid var(--line); border-radius:12px; background:#fff; font-size:12px; color:#41484f; }
+  .chip.ok { border-color:#cfe6d0; background:#eef8ee; color:var(--green-d); }
+  .chip.warn { border-color:#efd7b3; background:#fdf6ec; color:var(--warn); }
+  .metric-row { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:10px; margin-bottom:14px; }
+  .metric { background:#fff; border:1px solid var(--line); border-radius:8px; padding:10px 12px; min-width:0; }
+  .metric span { display:block; color:var(--muted); font-size:12px; margin-bottom:4px; }
+  .metric b { display:block; font-size:17px; line-height:1.2; font-variant-numeric:tabular-nums; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .detail-sections { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px; }
+  .detail-section { background:#fff; border:1px solid var(--line); border-radius:8px; overflow:hidden; }
+  .detail-section h3 { margin:0; padding:9px 12px; background:#fbfdff; border-bottom:1px solid var(--line); font-size:13px; font-weight:600; color:#41484f; }
+  .detail-list { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:0; }
+  .detail-kv { min-width:0; padding:9px 12px; border-top:1px solid #edf2f6; }
+  .detail-kv:nth-child(-n+2) { border-top:none; }
+  .detail-kv span { display:block; color:var(--muted); font-size:12px; margin-bottom:3px; }
+  .detail-kv b { display:block; font-size:13px; font-weight:500; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .detail-kv.full { grid-column:1/-1; }
+  .rate-lines { display:grid; gap:0; }
+  .rate-line { display:grid; grid-template-columns:92px 1fr; gap:10px; padding:10px 12px; border-top:1px solid #edf2f6; }
+  .rate-line:first-child { border-top:none; }
+  .rate-pair b { display:block; font-size:13px; }
+  .rate-pair span { display:block; color:var(--muted); font-size:12px; margin-top:2px; }
+  .rate-values { display:flex; flex-wrap:wrap; gap:6px 10px; min-width:0; }
+  .rate-values span { color:var(--muted); font-size:12px; white-space:nowrap; }
+  .rate-values strong { color:var(--ink); font-size:13px; font-weight:600; margin-left:3px; font-variant-numeric:tabular-nums; }
   .subtab { flex-shrink:0; }
-.subtabs { overflow-x:auto; display:flex; display:flex; gap:2px; padding:0 16px; background:var(--slate); border-top:1px solid var(--line); }
+  .subtabs { overflow-x:auto; display:flex; gap:2px; padding:0 16px; background:var(--slate); border-top:1px solid var(--line); }
   .subtab { padding:8px 13px; cursor:pointer; border:none; background:none; font-size:13px; color:var(--muted); border-bottom:2px solid transparent; }
   .subtab.on { color:var(--ink); font-weight:600; border-bottom-color:var(--green); }
-  #detailBody { padding:14px 22px; min-height:120px; }
+  #detailBody { padding:14px 22px 18px; min-height:120px; overflow-x:auto; }
   .mini { width:100%; border-collapse:collapse; margin-bottom:12px; }
   .mini th,.mini td { padding:7px 9px; font-size:13px; border-bottom:1px solid var(--line); white-space:nowrap; }
   .mini th { background:#fff; color:var(--muted); font-weight:500; }
@@ -82,6 +121,7 @@
   .statussel { padding:3px 6px; border:1px solid var(--line); border-radius:5px; font-size:12px; background:#fff; }
   .secbox { background:#fff; border:1px solid var(--line); border-radius:8px; padding:14px 16px; }
   .secbox .kv { font-size:13px; margin-bottom:6px; } .secbox .kv b { color:var(--muted); font-weight:500; margin-right:6px; }
+  body:not(.viewer) .po-status-read { display:none !important; }
   body.viewer .edit-only { display:none !important; }
   .toast-wrap { position: fixed; top: 16px; right: 16px; z-index: 9999; display: flex; flex-direction: column; gap: 8px; }
   .toast { padding: 10px 16px; border-radius: 8px; color: #fff; font-size: 14px; box-shadow: 0 4px 14px rgba(0,0,0,.15); transition: opacity .3s, transform .3s; max-width: 360px; }
@@ -91,6 +131,16 @@
   .toast.info { background: var(--ink, #2c3e50); }
   .grouphd { grid-column:1/-1; width:100%; font-weight:600; color:var(--green-d,#2e7d32); margin:10px 0 2px; border-top:1px solid var(--line,#eee); padding-top:8px; font-size:13px; }
   .kv-sec { grid-column:1/-1; flex-basis:100%; width:100%; font-size:12px; color:var(--muted,#888); margin-top:8px; border-top:1px dashed var(--line,#ddd); padding-top:6px; }
+  @media (max-width:760px) {
+    .profile-head { display:block; }
+    .profile-meta { margin-top:8px; }
+    .metric-row { grid-template-columns:repeat(2,minmax(0,1fr)); }
+    .detail-sections { grid-template-columns:1fr; }
+    .detail-list { grid-template-columns:1fr; }
+    .detail-kv:nth-child(-n+2) { border-top:1px solid #edf2f6; }
+    .detail-kv:first-child { border-top:none; }
+    .rate-line { grid-template-columns:1fr; gap:5px; }
+  }
 </style>
 </head>
 <body>
@@ -128,7 +178,7 @@
       <button class="btn-primary edit-only" onclick="openEdit()">+ 新增译员</button>
     </div>
     <table><thead><tr>
-      <th>姓名</th><th>语言对</th><th>状态</th><th>评级</th><th>翻译费率</th><th>当前项目</th><th>档期</th><th>合同到期</th><th>最近联系</th><th>操作</th>
+      <th>姓名</th><th>语言对</th><th>状态</th><th>评级</th><th>当前项目</th><th>档期</th><th>合同到期</th><th>最近联系</th><th>操作</th>
     </tr></thead><tbody id="rows"></tbody></table>
     <div class="empty" id="empty" style="display:none">没有匹配的译员</div>
   </section>
@@ -141,10 +191,12 @@
         <option value="">全部状态</option><option>未开票</option><option>已开票待付</option><option>已支付</option><option>有争议</option>
       </select>
       <span class="count" id="poCount"></span>
+      <span class="count" id="poImportResult"></span>
+      <label class="btn-ghost edit-only" style="display:inline-block">导入 PO Excel<input id="poImportFile" type="file" accept=".xlsx" style="display:none" onchange="importPOFile(this)"></label>
       <button class="btn-primary edit-only" onclick="openPO()">+ 新增 PO</button>
     </div>
     <table><thead><tr>
-      <th>译员</th><th>结算月</th><th>项目</th><th>角色</th><th>字数(千)</th><th>单价</th><th>金额</th><th>币种</th><th>状态</th><th>PO 号</th>
+      <th>译员</th><th>结算月</th><th>项目</th><th>语言对</th><th>角色</th><th>字数（字）</th><th>单价（/千字）</th><th>金额</th><th>币种</th><th>状态</th><th>PO 号</th>
     </tr></thead><tbody id="poRows"></tbody></table>
     <div class="empty" id="poEmpty" style="display:none">本月没有结算记录</div>
   </section>
@@ -156,33 +208,29 @@
   </section>
 
   <section id="view-pending" style="display:none">
-    <div class="toolbar"><span class="count" id="pendCount"></span><span class="muted">agent 提交的钱相关改动，人工批准后才生效</span></div>
+    <div class="toolbar"><span class="count" id="pendCount"></span></div>
     <table><thead><tr><th>提交时间</th><th>来源</th><th>类型</th><th>译员</th><th>内容</th><th>操作</th></tr></thead><tbody id="pendRows"></tbody></table>
     <div class="empty" id="pendEmpty" style="display:none">没有待审，或无权限</div>
   </section>
 </main>
 
 <!-- 新增/编辑译员 -->
-<div class="mask" id="editMask"><div class="modal"><h2 id="mTitle">新增译员</h2>
+<div class="mask" id="editMask"><div class="modal"><h2 id="mTitle">新增译员</h2><button class="modal-close" type="button" onclick="closeModal('editMask')" aria-label="关闭弹窗" title="关闭">×</button>
   <div class="form">
     <input type="hidden" id="f-id">
+    <input type="hidden" id="f-language_pairs">
     <div class="grouphd">基础信息</div>
     <div class="field"><label>姓名 <span class="req">*</span></label><input id="f-name"></div>
     <div class="field"><label>母语 <span class="req">*</span></label><input id="f-native_language" placeholder="中文"></div>
-    <div class="field"><label>入库日期 <span class="req">*</span></label><input id="f-onboarding_date" placeholder="2025-01-01"></div>
-    <div class="field"><label>邮箱</label><input id="f-email"></div>
+    <div class="field"><label>入库日期 <span class="req">*</span></label><input id="f-onboarding_date" type="date"></div>
+    <div class="field"><label>邮箱</label><input id="f-email" type="email"></div>
     <div class="field"><label>微信</label><input id="f-wechat"></div>
     <div class="field"><label>所在地</label><input id="f-location"></div>
     <div class="field"><label>时区</label><input id="f-timezone" placeholder="UTC+8"></div>
     <div class="field"><label>状态</label><select id="f-status"><option>Active</option><option>Dormant</option><option>Blacklisted</option><option>Probation</option></select></div>
     <div class="field"><label>来源</label><input id="f-source"></div>
     <div class="grouphd">专业能力</div>
-    <div class="field"><label>语言对</label><input id="f-language_pairs" placeholder="ZH→EN"></div>
-    <div class="field"><label>翻译费率（元/千字）</label><input id="f-translation_rate" type="number" step="1"></div>
-    <div class="field"><label>MTPE 费率</label><input id="f-mtpe_rate" type="number" step="1"></div>
-    <div class="field"><label>审校费率</label><input id="f-review_rate" type="number" step="1"></div>
-    <div class="field"><label>LQA 费率（元/时）</label><input id="f-lqa_rate" type="number" step="1"></div>
-    <div class="field"><label>报价确认日</label><input id="f-rate_confirmed_date" placeholder="2026-01-01"></div>
+    <div class="field full" id="editLangPairBlock"><label>语言对与费率</label><div id="editLangPairBody"></div></div>
     <div class="field"><label>擅长领域</label><input id="f-domains" placeholder="RPG,SLG"></div>
     <div class="field"><label>文本类型</label><input id="f-text_types" placeholder="UI,剧情"></div>
     <div class="field"><label>CAT 工具</label><input id="f-cat_tools" placeholder="Trados,memoQ"></div>
@@ -191,7 +239,7 @@
     <div class="grouphd">项目分配</div>
     <div class="field"><label>当前项目</label><input id="f-current_project"></div>
     <div class="field"><label>角色</label><select id="f-role"><option value="">—</option><option>翻译</option><option>审校</option><option>MTPE</option><option>LQA</option></select></div>
-    <div class="field"><label>日产字数</label><input id="f-daily_output" type="number" step="100"></div>
+    <div class="field"><label>日产字数</label><input id="f-daily_output" type="number" min="0" step="100"></div>
     <div class="field"><label>是否双休</label><select id="f-weekend_off"><option value="">—</option><option value="true">是</option><option value="false">否</option></select></div>
     <div class="field"><label>档期</label><select id="f-availability"><option value="">—</option><option>空闲</option><option>部分空闲</option><option>满负荷</option></select></div>
     <div class="grouphd">财务信息</div>
@@ -200,13 +248,13 @@
     <div class="field"><label>开票类型</label><input id="f-invoice_type"></div>
     <div class="field"><label>扣税方式</label><input id="f-tax_deduction"></div>
     <div class="field"><label>合同状态</label><select id="f-contract_status"><option value="">—</option><option>有效</option><option>即将到期</option><option>已过期</option><option>无合同</option></select></div>
-    <div class="field"><label>合同到期</label><input id="f-contract_expiry" placeholder="2026-12-31"></div>
+    <div class="field"><label>合同到期</label><input id="f-contract_expiry" type="date"></div>
     <div class="field"><label>NDA 签署</label><select id="f-nda_signed"><option value="">—</option><option value="true">是</option><option value="false">否</option></select></div>
     <div class="grouphd">绩效与沟通</div>
-    <div class="field"><label>准时率（%）</label><input id="f-punctuality_rate" type="number" step="1"></div>
+    <div class="field"><label>准时率（%）</label><input id="f-punctuality_rate" type="number" min="0" max="100" step="1"></div>
     <div class="field"><label>响应速度</label><select id="f-responsiveness"><option value="">—</option><option>快</option><option>一般</option><option>慢</option></select></div>
     <div class="field"><label>合作评级</label><select id="f-cooperation_rating"><option value="">—</option><option>优先合作</option><option>正常合作</option><option>谨慎合作</option><option>停止合作</option></select></div>
-    <div class="field"><label>最近联系</label><input id="f-last_contact" placeholder="2026-06-20"></div>
+    <div class="field"><label>最近联系</label><input id="f-last_contact" type="date"></div>
     <div class="field full"><label>备注</label><textarea id="f-remarks"></textarea></div>
   </div>
   <div class="actions"><button class="btn-ghost" onclick="closeModal('editMask')">取消</button><button class="btn-primary" onclick="saveTr()">保存</button></div>
@@ -215,6 +263,7 @@
 <!-- 译员详情（多子表）-->
 <div class="mask" id="detailMask"><div class="modal wide">
   <h2 id="dTitle">译员详情</h2>
+  <button class="modal-close" type="button" onclick="closeModal('detailMask')" aria-label="关闭弹窗" title="关闭">×</button>
   <div class="summary" id="dSummary"></div>
   <div class="subtabs" id="dSubtabs"></div>
   <div id="detailBody"></div>
@@ -222,30 +271,32 @@
 </div></div>
 
 <!-- 新增 PO -->
-<div class="mask" id="poMask"><div class="modal"><h2>新增 PO 结算行</h2>
+<div class="mask" id="poMask"><div class="modal"><h2>新增 PO 结算行</h2><button class="modal-close" type="button" onclick="closeModal('poMask')" aria-label="关闭弹窗" title="关闭">×</button>
   <div class="form">
-    <div class="field"><label>译员 <span class="req">*</span></label><select id="p-translator_id"></select></div>
-    <div class="field"><label>结算月 <span class="req">*</span></label><input id="p-settlement_month" placeholder="2026-06"></div>
+    <div class="field"><label>译员 <span class="req">*</span></label><select id="p-translator_id" onchange="fillPORate()"></select></div>
+    <div class="field"><label>结算月 <span class="req">*</span></label><input id="p-settlement_month" type="month"></div>
     <div class="field"><label>项目</label><input id="p-project"></div>
-    <div class="field"><label>角色</label><select id="p-role"><option>翻译</option><option>审校</option><option>MTPE</option><option>LQA</option><option>LQE</option><option>其他</option></select></div>
-    <div class="field"><label>字数（字）/ 工时</label><input id="p-word_count" type="number" step="1"></div>
-    <div class="field"><label>单价</label><input id="p-rate" type="number" step="1"></div>
+    <div class="field"><label>源语言</label><div class="lang-combo"><input id="p-source_lang" class="lang-input" placeholder="不指定" autocomplete="off" onfocus="openLangMenu(this)" oninput="fillPORate();openLangMenu(this)" onchange="fillPORate()" onkeydown="langKeydown(event)"><button class="lang-trigger" type="button" onclick="toggleLangMenu('p-source_lang')" aria-label="展开源语言列表">▼</button><div id="p-source_lang-menu" class="lang-menu" role="listbox"></div></div></div>
+    <div class="field"><label>目标语言</label><div class="lang-combo"><input id="p-target_lang" class="lang-input" placeholder="不指定" autocomplete="off" onfocus="openLangMenu(this)" oninput="fillPORate();openLangMenu(this)" onchange="fillPORate()" onkeydown="langKeydown(event)"><button class="lang-trigger" type="button" onclick="toggleLangMenu('p-target_lang')" aria-label="展开目标语言列表">▼</button><div id="p-target_lang-menu" class="lang-menu" role="listbox"></div></div></div>
+    <div class="field"><label>角色</label><select id="p-role" onchange="fillPORate()"><option>翻译</option><option>审校</option><option>MTPE</option><option>LQA</option><option>LQE</option><option>其他</option></select></div>
+    <div class="field"><label>字数（字）</label><input id="p-word_count" type="number" min="0" step="1"></div>
+    <div class="field"><label>单价（/千字）</label><input id="p-rate" type="number" min="0" step="1"></div>
     <div class="field"><label>币种</label><select id="p-currency"><option>CNY</option><option>USD</option><option>EUR</option></select></div>
     <div class="field"><label>状态</label><select id="p-status"><option>未开票</option><option>已开票待付</option><option>已支付</option><option>有争议</option></select></div>
     <div class="field"><label>PO 号</label><input id="p-po_number"></div>
     <div class="field"><label>备注</label><input id="p-remarks"></div>
-    <div class="field full muted" style="font-size:12px">金额 = 字数 × 单价，保存时自动算。</div>
+    <div class="field full muted" style="font-size:12px">金额 = 字数（字）÷ 1000 × 单价（/千字）；单价留空时按语言对和角色取价。</div>
   </div>
   <div class="actions"><button class="btn-ghost" onclick="closeModal('poMask')">取消</button><button class="btn-primary" onclick="savePO()">保存</button></div>
 </div></div>
 
 <script>
 const TRF = ["name","native_language","onboarding_date","email","wechat","location","timezone","status","source",
-  "language_pairs","translation_rate","mtpe_rate","review_rate","lqa_rate","rate_confirmed_date","domains","text_types","cat_tools","internal_rating","trial_result",
+  "language_pairs","domains","text_types","cat_tools","internal_rating","trial_result",
   "current_project","role","daily_output","weekend_off","availability",
   "currency","payment_method","invoice_type","tax_deduction","contract_status","contract_expiry","nda_signed",
   "punctuality_rate","responsiveness","cooperation_rating","last_contact","remarks"];
-let DATA=[], CUR=null, TOKEN="", ROLE="editor";
+let DATA=[], PAIR_OPTIONS=[], LANG_OPTIONS=[], CUR=null, TOKEN="", ROLE="editor";
 
 /* ---- 鉴权 ---- */
 async function switchRole() {
@@ -295,8 +346,11 @@ function showTab(t) {
 
 /* ---- 译员主表 ---- */
 async function load() {
-  const [ov, list] = await Promise.all([get("/api/overview"), get("/api/translators")]);
+  const [ov, list, pairs] = await Promise.all([get("/api/overview"), get("/api/translators"), get("/api/language-pair-options")]);
   DATA = list;
+  PAIR_OPTIONS = pairs;
+  LANG_OPTIONS = [...new Set(pairs.flatMap(p => [p.source_lang, p.target_lang]))];
+  renderLanguageOptions();
   document.getElementById("cards").innerHTML = `
     <div class="card"><div class="n">${ov.total}</div><div class="l">在册译员</div></div>
     <div class="card"><div class="n">${ov.active}</div><div class="l">活跃</div></div>
@@ -315,8 +369,8 @@ function render() {
     return `<tr>
       <td><button class="namebtn" onclick="openDetail(${t.id})">${esc(t.name)}</button></td>
       <td>${esc(t.language_pairs)||m()}</td><td><span class="pill s-${t.status}">${statusZh(t.status)}</span></td>
-      <td>${esc(t.internal_rating)||m()}</td><td class="num">${t.translation_rate??m()}</td>
-      <td>${esc(t.current_project)||m()}</td><td>${esc(t.availability)||m()}</td><td>${exp}</td><td>${esc(t.last_contact)||m()}</td>
+      <td>${esc(t.internal_rating)||m()}</td><td>${esc(t.current_project)||m()}</td>
+      <td>${esc(t.availability)||m()}</td><td>${exp}</td><td>${esc(t.last_contact)||m()}</td>
       <td><button class="btn-link edit-only" onclick="openEdit(${t.id})">编辑</button>
           <button class="btn-link danger edit-only" onclick='delTr(${t.id}, ${JSON.stringify(t.name)})'>删除</button></td>
     </tr>`;
@@ -329,21 +383,188 @@ function esc(s){ return (s==null?"":String(s)).replace(/[&<>"']/g,c=>({"&":"&amp
 function val(id){ const v=document.getElementById(id).value.trim(); return v===""?null:v; }
 function num(id){ const v=document.getElementById(id).value.trim(); return v===""?null:Number(v); }
 function fmt(n){ return (n||0).toLocaleString("zh-CN",{maximumFractionDigits:2}); }
+function isDateValue(v) {
+  if (!v) return true;
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(v)) return false;
+  const [y,m,d] = v.split("-").map(Number);
+  const dt = new Date(y, m - 1, d);
+  return dt.getFullYear() === y && dt.getMonth() === m - 1 && dt.getDate() === d;
+}
+function isMonthValue(v) {
+  if (!v) return true;
+  if (!/^\d{4}-\d{2}$/.test(v)) return false;
+  const m = Number(v.slice(5, 7));
+  return m >= 1 && m <= 12;
+}
+function failField(msg) { showToast(msg, "error"); return false; }
+function validDateField(id, label, required) {
+  const v = val(id);
+  if (!v) return required ? failField(`${label}必填`) : true;
+  return isDateValue(v) || failField(`${label}需为有效日期（YYYY-MM-DD）`);
+}
+function validMonthField(id, label, required) {
+  const v = val(id);
+  if (!v) return required ? failField(`${label}必填`) : true;
+  return isMonthValue(v) || failField(`${label}需为有效月份（YYYY-MM）`);
+}
+function validRange(id, label, min, max, required) {
+  const v = num(id);
+  if (v == null) return required ? failField(`${label}必填`) : true;
+  if (Number.isNaN(v)) return failField(`${label}需为数字`);
+  if (min != null && v < min) return failField(`${label}不能小于 ${min}`);
+  if (max != null && v > max) return failField(`${label}不能大于 ${max}`);
+  return true;
+}
+function validateTranslatorForm() {
+  if (!validDateField("f-onboarding_date", "入库日期", true)) return false;
+  if (!validDateField("f-contract_expiry", "合同到期", false)) return false;
+  if (!validDateField("f-last_contact", "最近联系", false)) return false;
+  const email = val("f-email");
+  if (email && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) return failField("邮箱格式不正确");
+  if (!validRange("f-daily_output", "日产字数", 0, null, false)) return false;
+  return validRange("f-punctuality_rate", "准时率", 0, 100, false);
+}
+function validatePOForm() {
+  if (!validMonthField("p-settlement_month", "结算月", true)) return false;
+  if (!validRange("p-word_count", "字数", 0, null, false)) return false;
+  return validRange("p-rate", "单价", 0, null, false);
+}
+function rateField(role){ return {"翻译":"translation_rate", "MTPE":"mtpe_rate", "审校":"review_rate", "LQA":"lqa_rate", "LQE":"lqe_rate"}[role] || ""; }
+function langPair(p){ return p && p.source_lang && p.target_lang ? `${esc(p.source_lang)}→${esc(p.target_lang)}` : m(); }
+function renderLanguageOptions() {
+  closeLangMenus();
+}
+function langInputHtml(id, placeholder, selected) {
+  return `<div class="lang-combo"><input id="${id}" class="lang-input" value="${esc(selected||"")}" placeholder="${esc(placeholder)}" autocomplete="off" onfocus="openLangMenu(this)" oninput="openLangMenu(this)" onkeydown="langKeydown(event)"><button class="lang-trigger" type="button" onclick="toggleLangMenu('${id}')" aria-label="展开语言列表">▼</button><div id="${id}-menu" class="lang-menu" role="listbox"></div></div>`;
+}
+function readLangPair(srcId, tgtId) {
+  const source_lang = val(srcId)?.toUpperCase() || null, target_lang = val(tgtId)?.toUpperCase() || null;
+  return {source_lang, target_lang};
+}
+function langMatches(query) {
+  const q = (query || "").trim().toUpperCase();
+  return LANG_OPTIONS.filter(v => !q || v.includes(q));
+}
+function positionLangMenu(combo) {
+  const menu = combo?.querySelector(".lang-menu");
+  if (!combo || !menu || !combo.classList.contains("open")) return;
+  const rect = combo.getBoundingClientRect();
+  menu.style.left = Math.round(rect.left) + "px";
+  menu.style.top = Math.round(rect.bottom + 4) + "px";
+  menu.style.width = Math.round(rect.width) + "px";
+}
+function openLangMenu(input) {
+  if (!input) return;
+  const combo = input.closest(".lang-combo");
+  const menu = combo?.querySelector(".lang-menu");
+  if (!combo || !menu) return;
+  closeLangMenus(combo);
+  const options = langMatches(input.value);
+  menu.innerHTML = options.length
+    ? options.map(v => `<button class="lang-option" type="button" role="option" data-value="${esc(v)}" onclick="pickLang('${input.id}', this.dataset.value)">${esc(v)}</button>`).join("")
+    : `<div class="lang-empty">无匹配语言代码</div>`;
+  combo.classList.add("open");
+  positionLangMenu(combo);
+}
+function toggleLangMenu(id) {
+  const input = document.getElementById(id);
+  const combo = input?.closest(".lang-combo");
+  if (!input || !combo) return;
+  if (combo.classList.contains("open")) { closeLangMenus(); return; }
+  input.focus();
+  openLangMenu(input);
+}
+function pickLang(id, value) {
+  const input = document.getElementById(id);
+  if (!input) return;
+  input.value = value;
+  input.dispatchEvent(new Event("change", {bubbles:true}));
+  closeLangMenus();
+  input.focus();
+}
+function closeLangMenus(except) {
+  document.querySelectorAll(".lang-combo.open").forEach(combo => {
+    if (combo === except) return;
+    combo.classList.remove("open");
+  });
+}
+function langKeydown(event) {
+  const input = event.target;
+  const combo = input.closest(".lang-combo");
+  if (event.key === "Escape") { closeLangMenus(); return; }
+  if (event.key === "ArrowDown") { event.preventDefault(); openLangMenu(input); return; }
+  if (event.key === "Enter" && combo?.classList.contains("open")) {
+    const first = combo.querySelector(".lang-option");
+    if (first) { event.preventDefault(); pickLang(input.id, first.dataset.value); }
+  }
+}
 
 function openEdit(id) {
   const t = id ? DATA.find(x=>x.id===id) : {};
   document.getElementById("mTitle").textContent = id ? "编辑译员" : "新增译员";
   document.getElementById("f-id").value = id || "";
+  document.getElementById("editLangPairBlock").style.display = id ? "" : "none";
   TRF.forEach(f => document.getElementById("f-"+f).value = t[f]!=null ? t[f] : "");
   if (!id) document.getElementById("f-status").value = "Active";
+  renderEditLangPairs(id);
   document.getElementById("editMask").classList.add("open");
+}
+async function renderEditLangPairs(id) {
+  const body = document.getElementById("editLangPairBody");
+  if (!id) { body.innerHTML = ""; return; }
+  const list = await get(`/api/translators/${id}/language-pairs`);
+  const rows = list.map(c => `<tr>
+    <td>${esc(c.source_lang)}→${esc(c.target_lang)}</td>
+    <td class="num">${c.translation_rate??"—"}</td><td class="num">${c.mtpe_rate??"—"}</td>
+    <td class="num">${c.review_rate??"—"}</td><td class="num">${c.lqa_rate??"—"}</td><td class="num">${c.lqe_rate??"—"}</td>
+    <td>${esc(c.currency)||"—"}</td>
+    <td><button class="btn-link danger" onclick="delEditLangPair(${c.id})">删除</button></td>
+  </tr>`).join("");
+  body.innerHTML = tbl(["语言对","翻译","MTPE","审校","LQA","LQE","币种","操作"], rows) + `
+    <div class="addrow">
+      ${langInputHtml("el-src", "源语言")}<span class="arrow">→</span>
+      ${langInputHtml("el-tgt", "目标语言")}
+      <input id="el-tr" type="number" style="width:72px" placeholder="翻译">
+      <input id="el-mtpe" type="number" style="width:72px" placeholder="MTPE">
+      <input id="el-rev" type="number" style="width:72px" placeholder="审校">
+      <input id="el-lqa" type="number" style="width:72px" placeholder="LQA">
+      <input id="el-lqe" type="number" style="width:72px" placeholder="LQE">
+      <select id="el-cur"><option value="">币种</option><option>CNY</option><option>USD</option><option>EUR</option></select>
+      <button class="btn-primary" onclick="saveEditLangPair()">保存语言对</button>
+    </div>`;
+}
+async function saveEditLangPair() {
+  const id = Number(document.getElementById("f-id").value);
+  const pair = readLangPair("el-src", "el-tgt");
+  if (!id || !pair.source_lang || !pair.target_lang) return;
+  try {
+    await api("POST", `/api/translators/${id}/language-pairs`, {
+      source_lang:pair.source_lang, target_lang:pair.target_lang, translation_rate:num("el-tr"), mtpe_rate:num("el-mtpe"),
+      review_rate:num("el-rev"), lqa_rate:num("el-lqa"), lqe_rate:num("el-lqe"), currency:val("el-cur")
+    });
+    await load();
+    const t = DATA.find(x=>x.id===id);
+    document.getElementById("f-language_pairs").value = t?.language_pairs || "";
+    renderEditLangPairs(id);
+  } catch(e) {}
+}
+async function delEditLangPair(lpid) {
+  const id = Number(document.getElementById("f-id").value);
+  if (!id || !confirm("删除这条语言对记录？")) return;
+  try {
+    await api("DELETE", `/api/translators/${id}/language-pairs/${lpid}`);
+    await load();
+    const t = DATA.find(x=>x.id===id);
+    document.getElementById("f-language_pairs").value = t?.language_pairs || "";
+    renderEditLangPairs(id);
+  } catch(e) {}
 }
 function closeModal(mk){ document.getElementById(mk).classList.remove("open"); }
 async function saveTr() {
   const b = {}; TRF.forEach(f => { let v=document.getElementById("f-"+f).value.trim(); b[f]=v===""?null:v; });
   if (!b.name) { showToast("姓名必填", "error"); return; }
   if (!b.native_language) { showToast("母语必填", "error"); return; }
-  if (!b.onboarding_date) { showToast("入库日期必填", "error"); return; }
+  if (!validateTranslatorForm()) return;
   b.status = b.status||"Active";
   const id = document.getElementById("f-id").value;
   try { await api(id?"PUT":"POST", "/api/translators"+(id?"/"+id:""), b); closeModal("editMask"); load(); } catch(e){}
@@ -374,25 +595,94 @@ async function importLQE(input) {
 
 /* ---- 详情 + 子表 ---- */
 const SUBS = [["lang","语言对"],["rate","报价变更"],["quality","质量记分"],["contracts","合同"],["payment","支付信息"],["complaints","客诉"],["capacity","产能"]];
-function openDetail(id) {
+function detailVal(v) { return v==null||v==="" ? "—" : esc(v); }
+function detailBool(b) { return b===true ? "是" : (b===false ? "否" : null); }
+function detailMetric(label, value) {
+  return `<div class="metric"><span>${label}</span><b>${detailVal(value)}</b></div>`;
+}
+function detailField([label, value, cls]) {
+  return `<div class="detail-kv ${cls||""}"><span>${label}</span><b title="${detailVal(value)}">${detailVal(value)}</b></div>`;
+}
+function detailSection(title, fields) {
+  return `<section class="detail-section"><h3>${title}</h3><div class="detail-list">${fields.map(detailField).join("")}</div></section>`;
+}
+function pairRateSection(list) {
+  const rows = (list || []).map(c => `
+    <div class="rate-line">
+      <div class="rate-pair"><b>${esc(c.source_lang)}→${esc(c.target_lang)}</b><span>${detailVal(c.currency)}</span></div>
+      <div class="rate-values">
+        <span>翻译<strong>${detailVal(c.translation_rate)}</strong></span>
+        <span>MTPE<strong>${detailVal(c.mtpe_rate)}</strong></span>
+        <span>审校<strong>${detailVal(c.review_rate)}</strong></span>
+        <span>LQA<strong>${detailVal(c.lqa_rate)}</strong></span>
+        <span>LQE<strong>${detailVal(c.lqe_rate)}</strong></span>
+      </div>
+    </div>`).join("");
+  return `<section class="detail-section pair-rate-section"><h3>语言对费率</h3><div class="rate-lines">${rows || `<div class="detail-kv full"><span>语言对</span><b>未维护</b></div>`}</div></section>`;
+}
+async function renderDetailSummary() {
+  const status = statusZh(CUR.status);
+  const languagePairs = await get(`/api/translators/${CUR.id}/language-pairs`);
+  document.getElementById("dSummary").innerHTML = `
+    <div class="profile-head">
+      <div>
+        <div class="profile-name">${esc(CUR.name)}</div>
+        <div class="profile-meta">
+          <span class="chip ok">${esc(status)}</span>
+          <span class="chip">评级 ${detailVal(CUR.internal_rating)}</span>
+          <span class="chip">${detailVal(CUR.language_pairs)}</span>
+        </div>
+      </div>
+      <div class="profile-meta">
+        <span class="chip warn">${detailVal(CUR.availability)}</span>
+        <span class="chip">${detailVal(CUR.current_project)}</span>
+      </div>
+    </div>
+    <div class="metric-row">
+      ${detailMetric("最近 QA", CUR.recent_qa_score)}
+      ${detailMetric("累计 QA", CUR.cumulative_qa_score)}
+      ${detailMetric("累计未付", CUR.cumulative_unpaid)}
+      ${detailMetric("累计字数", CUR.cumulative_word_count)}
+    </div>
+    <div class="detail-sections">
+      ${detailSection("基础信息", [
+        ["母语", CUR.native_language],
+        ["入库日期", CUR.onboarding_date],
+        ["来源", CUR.source],
+        ["合作评级", CUR.cooperation_rating]
+      ])}
+      ${pairRateSection(languagePairs)}
+      ${detailSection("项目与产能", [
+        ["当前项目", CUR.current_project],
+        ["角色", CUR.role],
+        ["档期", CUR.availability],
+        ["最近联系", CUR.last_contact]
+      ])}
+      ${detailSection("合同与支付", [
+        ["币种", CUR.currency],
+        ["支付方式", CUR.payment_method],
+        ["合同状态", CUR.contract_status],
+        ["合同到期", CUR.contract_expiry],
+        ["NDA", detailBool(CUR.nda_signed)]
+      ])}
+      ${detailSection("质量与风险", [
+        ["低错次数", CUR.low_error_count],
+        ["低错率/千字", CUR.low_error_rate],
+        ["客诉次数", CUR.complaint_count],
+        ["累计扣款", CUR.deduction_total]
+      ])}
+      ${detailSection("报价联动", [
+        ["谈判状态", CUR.negotiation_status],
+        ["最近谈价日", CUR.last_negotiation_date],
+        ["谈后费率", CUR.post_negotiation_rate],
+        ["降幅%", CUR.rate_reduction_pct]
+      ])}
+    </div>`;
+}
+async function openDetail(id) {
   CUR = DATA.find(x=>x.id===id);
   document.getElementById("dTitle").textContent = CUR.name + " · 详情";
-  const _kv = ([k,v]) => `<div class="kv"><b>${k}</b>${v==null||v===""?"—":esc(v)}</div>`;
-  const _bool = b => b===true?"是":(b===false?"否":null);
-  document.getElementById("dSummary").innerHTML =
-    [["母语",CUR.native_language],["语言对",CUR.language_pairs],["入库日期",CUR.onboarding_date],
-     ["状态",statusZh(CUR.status)],["评级",CUR.internal_rating],["来源",CUR.source],
-     ["翻译费率",CUR.translation_rate],["MTPE费率",CUR.mtpe_rate],["审校费率",CUR.review_rate],
-     ["当前项目",CUR.current_project],["角色",CUR.role],["档期",CUR.availability],
-     ["币种",CUR.currency],["支付方式",CUR.payment_method],["合同状态",CUR.contract_status],
-     ["合同到期",CUR.contract_expiry],["NDA",_bool(CUR.nda_signed)],["合作评级",CUR.cooperation_rating]
-    ].map(_kv).join("")
-    + `<div class="kv-sec">系统自动算 · 联动维护（只读）</div>`
-    + [["最近QA分",CUR.recent_qa_score],["累计QA均分",CUR.cumulative_qa_score],["低错次数",CUR.low_error_count],
-       ["低错率(/千字)",CUR.low_error_rate],["客诉次数",CUR.complaint_count],["累计扣款",CUR.deduction_total],
-       ["谈判状态",CUR.negotiation_status],["最近谈价日",CUR.last_negotiation_date],["谈后费率",CUR.post_negotiation_rate],
-       ["降幅%",CUR.rate_reduction_pct],["累计未付",CUR.cumulative_unpaid],["累计完成字数",CUR.cumulative_word_count]
-      ].map(_kv).join("");
+  await renderDetailSummary();
   document.getElementById("dSubtabs").innerHTML = SUBS.map(([k,l],idx) =>
     `<button class="subtab ${idx===0?"on":""}" data-k="${k}" onclick="showSub('${k}')">${l}</button>`).join("");
   showSub("lang");
@@ -405,81 +695,121 @@ function showSub(k) {
 function tbl(headers, bodyHtml) {
   return `<table class="mini"><thead><tr>${headers.map(h=>`<th>${h}</th>`).join("")}</tr></thead><tbody>${bodyHtml || `<tr><td colspan="${headers.length}" class="muted" style="padding:12px">暂无记录</td></tr>`}</tbody></table>`;
 }
+function delBtn(path, sub, label) {
+  return `<button class="btn-link danger edit-only" onclick="delChild('${path}','${sub}','${label}')">删除</button>`;
+}
+async function delChild(path, sub, label) {
+  if (!confirm(`删除这条${label}记录？`)) return;
+  try {
+    await api("DELETE", path);
+    await load();
+    CUR = DATA.find(x=>x.id===CUR.id);
+    await renderDetailSummary();
+    await ({lang:subLang, rate:subRate, quality:subQuality, contracts:subContracts, payment:subPayment, complaints:subComplaints, capacity:subCapacity}[sub])();
+  } catch(e) {}
+}
 async function subLang() {
   const list = await get(`/api/translators/${CUR.id}/language-pairs`);
-  const rows = list.map(c=>`<tr><td>${esc(c.source_lang)}</td><td>${esc(c.target_lang)}</td></tr>`).join("");
-  document.getElementById("detailBody").innerHTML = tbl(["源","目标"], rows) + `
+  const rows = list.map(c=>`<tr><td>${esc(c.source_lang)}</td><td>${esc(c.target_lang)}</td><td class="num">${c.translation_rate??"—"}</td><td class="num">${c.mtpe_rate??"—"}</td><td class="num">${c.review_rate??"—"}</td><td class="num">${c.lqa_rate??"—"}</td><td class="num">${c.lqe_rate??"—"}</td><td>${esc(c.currency)||"—"}</td><td>${delBtn(`/api/translators/${CUR.id}/language-pairs/${c.id}`,"lang","语言对")}</td></tr>`).join("");
+  document.getElementById("detailBody").innerHTML = tbl(["源","目标","翻译","MTPE","审校","LQA","LQE","币种","操作"], rows) + `
     <div class="addrow edit-only">
-      <input id="la-src" style="width:70px" placeholder="ZH"> → <input id="la-tgt" style="width:70px" placeholder="EN">
+      ${langInputHtml("la-src", "源语言")}
+      <span class="arrow">→</span>
+      ${langInputHtml("la-tgt", "目标语言")}
+      <input id="la-tr" type="number" style="width:72px" placeholder="翻译">
+      <input id="la-mtpe" type="number" style="width:72px" placeholder="MTPE">
+      <input id="la-rev" type="number" style="width:72px" placeholder="审校">
+      <input id="la-lqa" type="number" style="width:72px" placeholder="LQA">
+      <input id="la-lqe" type="number" style="width:72px" placeholder="LQE">
+      <select id="la-cur"><option value="">币种</option><option>CNY</option><option>USD</option><option>EUR</option></select>
       <button class="btn-primary" onclick="addLang()">添加</button>
     </div>`;
 }
 async function addLang() {
-  const src = document.getElementById("la-src").value.trim();
-  const tgt = document.getElementById("la-tgt").value.trim();
-  if (!src||!tgt) return;
-  await api("POST", `/api/translators/${CUR.id}/language-pairs`, {source_lang:src, target_lang:tgt});
-  subLang(); CUR=DATA.find(x=>x.id===CUR.id); load();
+  const pair = readLangPair("la-src", "la-tgt");
+  if (!pair.source_lang || !pair.target_lang) return;
+  await api("POST", `/api/translators/${CUR.id}/language-pairs`, {
+    source_lang:pair.source_lang, target_lang:pair.target_lang, translation_rate:num("la-tr"), mtpe_rate:num("la-mtpe"),
+    review_rate:num("la-rev"), lqa_rate:num("la-lqa"), lqe_rate:num("la-lqe"), currency:val("la-cur")
+  });
+  await load();
+  CUR = DATA.find(x=>x.id===CUR.id);
+  await renderDetailSummary();
+  subLang();
 }
 
 async function subRate() {
   const list = await get(`/api/translators/${CUR.id}/rate-changes`);
-  const rows = list.map(c=>`<tr><td>${esc(c.change_date)}</td><td>${esc(c.task_type)||"—"}</td><td>${c.original_rate??"—"} <span class="arrow">→</span> <b>${c.new_rate??"—"}</b></td><td>${esc(c.negotiator)||"—"}</td><td>${esc(c.reason)||"—"}</td><td>${esc(c.remarks)||"—"}</td></tr>`).join("");
-  document.getElementById("detailBody").innerHTML = tbl(["日期","任务","费率变化","谈价人","原因","备注"], rows) + `
+  const rows = list.map(c=>`<tr><td>${esc(c.change_date)}</td><td>${langPair(c)}</td><td>${esc(c.task_type)||"—"}</td><td>${c.original_rate??"—"} <span class="arrow">→</span> <b>${c.new_rate??"—"}</b></td><td>${esc(c.negotiator)||"—"}</td><td>${esc(c.reason)||"—"}</td><td>${esc(c.remarks)||"—"}</td><td>${delBtn(`/api/translators/${CUR.id}/rate-changes/${c.id}`,"rate","报价变更")}</td></tr>`).join("");
+  document.getElementById("detailBody").innerHTML = tbl(["日期","语言对","任务","费率变化","谈价人","原因","备注","操作"], rows) + `
     <div class="addrow edit-only">
-      <div class="field"><label>日期</label><input id="a-date" value="${today()}"></div>
+      <div class="field"><label>日期</label><input id="a-date" type="date" value="${today()}"></div>
+      <div class="field"><label>源语言</label>${langInputHtml("a-src", "默认")}</div>
+      <div class="field"><label>目标语言</label>${langInputHtml("a-tgt", "默认")}</div>
       <div class="field"><label>任务</label><select id="a-task"><option>翻译</option><option>审校</option><option>MTPE</option><option>LQA</option><option>LQE</option><option>其他</option></select></div>
-      <div class="field"><label>原费率</label><input id="a-orig" type="number" style="width:80px"></div>
-      <div class="field"><label>新费率</label><input id="a-new" type="number" style="width:80px"></div>
+      <div class="field"><label>原费率</label><input id="a-orig" type="number" min="0" style="width:80px"></div>
+      <div class="field"><label>新费率</label><input id="a-new" type="number" min="0" style="width:80px"></div>
       <div class="field"><label>谈价人</label><input id="a-nego" style="width:90px"></div>
       <div class="field"><label>原因</label><input id="a-reason" style="width:110px"></div>
       <button class="btn-primary" onclick="addRate()">添加调价</button>
     </div>`;
 }
 async function addRate() {
-  const b = {change_date:val("a-date"), task_type:document.getElementById("a-task").value, original_rate:num("a-orig"), new_rate:num("a-new"), negotiator:val("a-nego"), reason:val("a-reason")};
-  if (!b.change_date) { showToast("日期必填", "error"); return; }
+  const pair = readLangPair("a-src", "a-tgt");
+  const b = {change_date:val("a-date"), source_lang:pair.source_lang, target_lang:pair.target_lang, task_type:document.getElementById("a-task").value, original_rate:num("a-orig"), new_rate:num("a-new"), negotiator:val("a-nego"), reason:val("a-reason")};
+  if (!validDateField("a-date", "日期", true)) return;
+  if (!validRange("a-orig", "原费率", 0, null, false)) return;
+  if (!validRange("a-new", "新费率", 0, null, false)) return;
   try { const res = await api("POST",`/api/translators/${CUR.id}/rate-changes`, b);
     if (res && res.pending) { showToast(res.msg || "已提交待人工审核", "info"); return; }
-    if (b.task_type === "翻译") { await load(); CUR=DATA.find(x=>x.id===CUR.id); }
+    await load();
+    CUR = DATA.find(x=>x.id===CUR.id);
+    await renderDetailSummary();
     subRate(); } catch(e){}
 }
 async function subQuality() {
   const list = await get(`/api/translators/${CUR.id}/quality`);
-  const rows = list.map(c=>`<tr><td>${esc(c.evaluation_period)||"—"}</td><td>${esc(c.project)||"—"}</td><td>${esc(c.qa_type)||"—"}</td><td><b>${c.score??"—"}</b></td><td>${c.critical_errors}/${c.major_errors}/${c.minor_errors}</td><td>${esc(c.reviewer)||"—"}</td></tr>`).join("");
-  document.getElementById("detailBody").innerHTML = tbl(["周期","项目","类型","评分","C/M/Minor","评审人"], rows) + `
+  const rows = list.map(c=>`<tr><td>${esc(c.evaluation_period)||"—"}</td><td>${esc(c.project)||"—"}</td><td>${esc(c.qa_type)||"—"}</td><td><b>${c.score??"—"}</b></td><td>${c.critical_errors}/${c.major_errors}/${c.minor_errors}</td><td>${esc(c.reviewer)||"—"}</td><td>${delBtn(`/api/translators/${CUR.id}/quality/${c.id}`,"quality","质量记分")}</td></tr>`).join("");
+  document.getElementById("detailBody").innerHTML = tbl(["周期","项目","类型","评分","C/M/Minor","评审人","操作"], rows) + `
     <div class="addrow edit-only">
-      <div class="field"><label>周期</label><input id="q-period" value="${month()}" style="width:80px"></div>
+      <div class="field"><label>周期</label><input id="q-period" type="month" value="${month()}" style="width:105px"></div>
       <div class="field"><label>项目</label><input id="q-project" style="width:100px"></div>
       <div class="field"><label>类型</label><select id="q-type"><option>终检</option><option>过程抽检</option><option>首件审核</option><option>仲裁</option></select></div>
-      <div class="field"><label>评分</label><input id="q-score" type="number" style="width:70px"></div>
-      <div class="field"><label>C</label><input id="q-c" type="number" value="0" style="width:50px"></div>
-      <div class="field"><label>M</label><input id="q-m" type="number" value="0" style="width:50px"></div>
-      <div class="field"><label>Minor</label><input id="q-mi" type="number" value="0" style="width:50px"></div>
+      <div class="field"><label>评分</label><input id="q-score" type="number" min="0" max="100" style="width:70px"></div>
+      <div class="field"><label>C</label><input id="q-c" type="number" min="0" value="0" style="width:50px"></div>
+      <div class="field"><label>M</label><input id="q-m" type="number" min="0" value="0" style="width:50px"></div>
+      <div class="field"><label>Minor</label><input id="q-mi" type="number" min="0" value="0" style="width:50px"></div>
       <div class="field"><label>评审人</label><input id="q-rev" style="width:80px"></div>
       <button class="btn-primary" onclick="addQuality()">添加</button>
     </div>`;
 }
 async function addQuality() {
   const b = {evaluation_period:val("q-period"), project:val("q-project"), qa_type:document.getElementById("q-type").value, score:num("q-score"), critical_errors:num("q-c")||0, major_errors:num("q-m")||0, minor_errors:num("q-mi")||0, reviewer:val("q-rev")};
+  if (!validMonthField("q-period", "周期", false)) return;
+  if (!validRange("q-score", "评分", 0, 100, false)) return;
+  if (!validRange("q-c", "C", 0, null, false)) return;
+  if (!validRange("q-m", "M", 0, null, false)) return;
+  if (!validRange("q-mi", "Minor", 0, null, false)) return;
   try { await api("POST",`/api/translators/${CUR.id}/quality`, b); subQuality(); } catch(e){}
 }
 async function subContracts() {
   const list = await get(`/api/translators/${CUR.id}/contracts`);
-  const rows = list.map(c=>`<tr><td>${esc(c.contract_number)||"—"}</td><td>${esc(c.contract_type)||"—"}</td><td>${esc(c.sign_date)||"—"}</td><td>${esc(c.expiry_date)||"—"}</td><td>${c.nda_signed?"已签":"未签"}</td><td>${esc(c.status)||"—"}</td></tr>`).join("");
-  document.getElementById("detailBody").innerHTML = tbl(["编号","类型","签署","到期","NDA","状态"], rows) + `
+  const rows = list.map(c=>`<tr><td>${esc(c.contract_number)||"—"}</td><td>${esc(c.contract_type)||"—"}</td><td>${esc(c.sign_date)||"—"}</td><td>${esc(c.expiry_date)||"—"}</td><td>${c.nda_signed?"已签":"未签"}</td><td>${esc(c.status)||"—"}</td><td>${delBtn(`/api/translators/${CUR.id}/contracts/${c.id}`,"contracts","合同")}</td></tr>`).join("");
+  document.getElementById("detailBody").innerHTML = tbl(["编号","类型","签署","到期","NDA","状态","操作"], rows) + `
     <div class="addrow edit-only">
       <div class="field"><label>编号</label><input id="c-no" style="width:110px"></div>
       <div class="field"><label>类型</label><select id="c-type"><option>框架协议</option><option>单项目合同</option><option>试用合同</option><option>兼职协议</option></select></div>
-      <div class="field"><label>签署</label><input id="c-sign" placeholder="2026-01-01" style="width:100px"></div>
-      <div class="field"><label>到期</label><input id="c-exp" placeholder="2027-01-01" style="width:100px"></div>
+      <div class="field"><label>签署</label><input id="c-sign" type="date" style="width:125px"></div>
+      <div class="field"><label>到期</label><input id="c-exp" type="date" style="width:125px"></div>
       <div class="field"><label>NDA</label><select id="c-nda"><option value="true">已签</option><option value="false">未签</option></select></div>
-      <div class="field"><label>状态</label><input id="c-status" value="有效" style="width:80px"></div>
+      <div class="field"><label>状态</label><select id="c-status" style="width:90px"><option>有效</option><option>即将到期</option><option>已过期</option><option>无合同</option></select></div>
       <button class="btn-primary" onclick="addContract()">添加</button>
     </div>`;
 }
 async function addContract() {
   const b = {contract_number:val("c-no"), contract_type:document.getElementById("c-type").value, sign_date:val("c-sign"), expiry_date:val("c-exp"), nda_signed:document.getElementById("c-nda").value==="true", status:val("c-status")};
+  if (!validDateField("c-sign", "签署日期", false)) return;
+  if (!validDateField("c-exp", "到期日期", false)) return;
   try { await api("POST",`/api/translators/${CUR.id}/contracts`, b); subContracts(); } catch(e){}
 }
 async function subPayment() {
@@ -492,6 +822,7 @@ async function subPayment() {
       <div class="kv"><b>身份证</b><span id="pv-id">${esc(p.id_card)||"—"}</span></div>
       <div class="kv"><b>支持微信</b>${p.supports_wechat?"是":"否"}</div>
       <button class="btn-ghost edit-only" style="margin-top:6px" onclick="revealPay()">查看明文（记审计）</button>
+      <button class="btn-link danger edit-only" style="margin-top:6px" onclick="delChild('/api/translators/${CUR.id}/payment','payment','支付信息')">删除</button>
     </div>` : `<div class="empty">暂无支付信息</div>`;
   document.getElementById("detailBody").innerHTML = box + `
     <div class="addrow edit-only" style="margin-top:12px">
@@ -514,38 +845,49 @@ async function savePayment() {
 }
 async function subComplaints() {
   const list = await get(`/api/translators/${CUR.id}/complaints`);
-  const rows = list.map(c=>`<tr><td>${esc(c.date)||"—"}</td><td>${esc(c.project)||"—"}</td><td>${esc(c.complaint_type)||"—"}</td><td class="sev-${esc(c.severity)}">${esc(c.severity)||"—"}</td><td class="num">${c.deduction_amount??"—"}</td><td>${esc(c.resolution)||"—"}</td></tr>`).join("");
-  document.getElementById("detailBody").innerHTML = tbl(["日期","项目","类型","严重度","扣款","处理"], rows) + `
+  const rows = list.map(c=>`<tr><td>${esc(c.date)||"—"}</td><td>${esc(c.project)||"—"}</td><td>${esc(c.complaint_type)||"—"}</td><td class="sev-${esc(c.severity)}">${esc(c.severity)||"—"}</td><td class="num">${c.deduction_amount??"—"}</td><td>${esc(c.resolution)||"—"}</td><td>${delBtn(`/api/translators/${CUR.id}/complaints/${c.id}`,"complaints","客诉")}</td></tr>`).join("");
+  document.getElementById("detailBody").innerHTML = tbl(["日期","项目","类型","严重度","扣款","处理","操作"], rows) + `
     <div class="addrow edit-only">
-      <div class="field"><label>日期</label><input id="x-date" value="${today()}" style="width:100px"></div>
+      <div class="field"><label>日期</label><input id="x-date" type="date" value="${today()}" style="width:125px"></div>
       <div class="field"><label>项目</label><input id="x-project" style="width:100px"></div>
       <div class="field"><label>类型</label><select id="x-type"><option>质量不达标</option><option>延期交付</option><option>沟通问题</option><option>态度问题</option><option>泄露信息</option><option>其他</option></select></div>
       <div class="field"><label>严重度</label><select id="x-sev"><option>轻微</option><option>一般</option><option>严重</option><option>极严重</option></select></div>
-      <div class="field"><label>扣款</label><input id="x-ded" type="number" style="width:80px"></div>
+      <div class="field"><label>扣款</label><input id="x-ded" type="number" min="0" style="width:80px"></div>
       <div class="field"><label>处理</label><input id="x-res" style="width:90px"></div>
       <button class="btn-primary" onclick="addComplaint()">添加</button>
     </div>`;
 }
 async function addComplaint() {
   const b = {date:val("x-date"), project:val("x-project"), complaint_type:document.getElementById("x-type").value, severity:document.getElementById("x-sev").value, deduction_amount:num("x-ded"), resolution:val("x-res")};
+  if (!validDateField("x-date", "日期", false)) return;
+  if (!validRange("x-ded", "扣款", 0, null, false)) return;
   try { await api("POST",`/api/translators/${CUR.id}/complaints`, b); subComplaints(); } catch(e){}
 }
 async function subCapacity() {
   const d = await get(`/api/translators/${CUR.id}/capacity`);
-  const rows = d.weeks.map(w=>`<tr><td>${esc(w.period)}</td><td class="num">${w.occupancy}%</td><td class="num ${w.available<0?"amt-bad":""}">${w.available}%${w.available<0?" ⚠超负荷":""}</td></tr>`).join("");
-  document.getElementById("detailBody").innerHTML = tbl(["周","占用","可用率"], rows) + `
+  const weekMap = Object.fromEntries(d.weeks.map(w => [w.period, w]));
+  const rows = d.rows.map(c => {
+    const period = `${c.period_year}-${String(c.period_month).padStart(2,"0")} W${c.week_no}`;
+    const week = weekMap[period] || {available:"—"};
+    return `<tr><td>${esc(period)}</td><td>${esc(c.project)||"—"}</td><td class="num">${c.occupancy_pct}%</td><td class="num ${week.available<0?"amt-bad":""}">${week.available}%${week.available<0?" ⚠超负荷":""}</td><td>${delBtn(`/api/translators/${CUR.id}/capacity/${c.id}`,"capacity","产能")}</td></tr>`;
+  }).join("");
+  document.getElementById("detailBody").innerHTML = tbl(["周","项目","本记录占用","周可用率","操作"], rows) + `
     <div class="addrow edit-only">
-      <div class="field"><label>年</label><input id="cp-y" type="number" value="2026" style="width:70px"></div>
-      <div class="field"><label>月</label><input id="cp-m" type="number" value="${(new Date()).getMonth()+1}" style="width:55px"></div>
-      <div class="field"><label>周(1-5)</label><input id="cp-w" type="number" value="1" style="width:60px"></div>
+      <div class="field"><label>年</label><input id="cp-y" type="number" min="1900" max="2100" value="2026" style="width:70px"></div>
+      <div class="field"><label>月</label><input id="cp-m" type="number" min="1" max="12" value="${(new Date()).getMonth()+1}" style="width:55px"></div>
+      <div class="field"><label>周(1-6)</label><input id="cp-w" type="number" min="1" max="6" value="1" style="width:60px"></div>
       <div class="field"><label>项目</label><input id="cp-proj" style="width:100px"></div>
-      <div class="field"><label>占用%</label><input id="cp-occ" type="number" value="50" style="width:70px"></div>
+      <div class="field"><label>占用%</label><input id="cp-occ" type="number" min="0" max="100" value="50" style="width:70px"></div>
       <button class="btn-primary" onclick="addCapacity()">添加</button>
     </div>
     <div class="muted" style="font-size:12px;margin-top:8px">可用率 = 100 − 该周各项目占用之和（PRD §5.2）；超 100% 标红。</div>`;
 }
 async function addCapacity() {
   const b = {period_year:num("cp-y"), period_month:num("cp-m"), week_no:num("cp-w"), project:val("cp-proj"), occupancy_pct:num("cp-occ")||0};
+  if (!validRange("cp-y", "年", 1900, 2100, true)) return;
+  if (!validRange("cp-m", "月", 1, 12, true)) return;
+  if (!validRange("cp-w", "周", 1, 6, true)) return;
+  if (!validRange("cp-occ", "占用", 0, 100, true)) return;
   try { await api("POST",`/api/translators/${CUR.id}/capacity`, b); subCapacity(); } catch(e){}
 }
 function today(){ return new Date().toISOString().slice(0,10); }
@@ -572,24 +914,65 @@ async function loadPO() {
   document.getElementById("poRows").innerHTML = list.map(p => {
     const amt = p.amount_ok ? `<span class="num">${fmt(p.amount)}</span>` : `<span class="num amt-bad" title="应为 ${fmt(p.expected_amount)}">${fmt(p.amount)} ⚠</span>`;
     const opts = ["未开票","已开票待付","已支付","有争议"].map(o=>`<option ${o===p.status?"selected":""}>${o}</option>`).join("");
-    return `<tr><td>${esc(p.translator_name)}</td><td>${esc(p.settlement_month)}</td><td>${esc(p.project)||m()}</td><td>${esc(p.role)||m()}</td>
+    return `<tr><td>${esc(p.translator_name)}</td><td>${esc(p.settlement_month)}</td><td>${esc(p.project)||m()}</td><td>${langPair(p)}</td><td>${esc(p.role)||m()}</td>
       <td class="num">${p.word_count??m()}</td><td class="num">${p.rate??m()}</td><td>${amt}</td><td>${esc(p.currency)}</td>
-      <td><span class="pill st-${p.status}">${esc(p.status)}</span><select class="statussel edit-only" onchange="setPOStatus(${p.id},this.value)">${opts}</select></td>
+      <td><span class="pill po-status-read st-${p.status}">${esc(p.status)}</span><select class="statussel edit-only" onchange="setPOStatus(${p.id},this.value)">${opts}</select></td>
       <td class="muted">${esc(p.po_number)||"—"}</td></tr>`;
   }).join("");
 }
 async function setPOStatus(id, status) { try { const res = await api("PUT",`/api/po/${id}/status`,{status}); if (res && res.pending) showToast(res.msg||"已提交待人工审核", "info"); loadPO(); } catch(e){ loadPO(); } }
+async function importPOFile(input) {
+  const file = input.files && input.files[0];
+  if (!file) return;
+  const fd = new FormData();
+  fd.append("file", file);
+  try {
+    const r = await fetch("/api/import/po", {method:"POST", headers:{"Authorization":"Bearer "+TOKEN}, body:fd});
+    let d = {};
+    try { d = await r.json(); } catch(e) {}
+    if (r.status===403) { showToast("只读视角，无导入权限", "error"); return; }
+    if (!r.ok) { showToast("PO 导入失败：" + (d.detail || r.status), "error"); return; }
+    const invalid = (d.invalid_rows || []).length;
+    const skipped = d.skipped_dup_po || 0;
+    const summary = `导入 ${d.imported || 0} 行，跳过重复 ${skipped} 行，错误 ${invalid} 行`;
+    const result = document.getElementById("poImportResult");
+    result.textContent = summary;
+    result.title = (d.invalid_rows || []).map(x => `第 ${x.row} 行：${x.error}`).join("\n");
+    showToast(summary, invalid ? "info" : "success");
+    if (invalid) console.warn("PO import invalid_rows", d.invalid_rows);
+    input.value = "";
+    document.getElementById("poMonth").innerHTML = "";
+    loadPO();
+  } finally {
+    input.value = "";
+  }
+}
 function openPO() {
   document.getElementById("p-translator_id").innerHTML = DATA.map(t=>`<option value="${t.id}">${esc(t.name)}</option>`).join("");
+  document.getElementById("p-source_lang").value = "";
+  document.getElementById("p-target_lang").value = "";
   document.getElementById("p-settlement_month").value = document.getElementById("poMonth").value || month().replace(/-\d\d$/, "-06");
   ["p-project","p-word_count","p-rate","p-po_number","p-remarks"].forEach(i=>document.getElementById(i).value="");
   document.getElementById("poMask").classList.add("open");
 }
+async function fillPORate() {
+  const tid = Number(document.getElementById("p-translator_id").value);
+  const pair = readLangPair("p-source_lang", "p-target_lang");
+  const field = rateField(document.getElementById("p-role").value);
+  if (!tid || !pair.source_lang || !pair.target_lang || !field) return;
+  const list = await get(`/api/translators/${tid}/language-pairs`);
+  const lp = list.find(x => x.source_lang === pair.source_lang && x.target_lang === pair.target_lang);
+  if (lp && lp[field] != null) document.getElementById("p-rate").value = lp[field];
+  if (lp && lp.currency) document.getElementById("p-currency").value = lp.currency;
+}
 async function savePO() {
+  const pair = readLangPair("p-source_lang", "p-target_lang");
   const b = {translator_id:Number(document.getElementById("p-translator_id").value), settlement_month:val("p-settlement_month"),
-    project:val("p-project"), role:document.getElementById("p-role").value, word_count:num("p-word_count"), rate:num("p-rate"),
+    project:val("p-project"), source_lang:pair.source_lang, target_lang:pair.target_lang,
+    role:document.getElementById("p-role").value, word_count:num("p-word_count"), rate:num("p-rate"),
     currency:document.getElementById("p-currency").value, status:document.getElementById("p-status").value, po_number:val("p-po_number"), remarks:val("p-remarks")};
   if (!b.translator_id || !b.settlement_month) { showToast("译员和结算月必填", "error"); return; }
+  if (!validatePOForm()) return;
   try { const res = await api("POST","/api/po", b);
     if (res && res.pending) showToast(res.msg || "已提交待人工审核", "info");
     closeModal("poMask"); document.getElementById("poMonth").innerHTML=""; loadPO(); } catch(e){}
@@ -610,8 +993,8 @@ async function loadPending() {
   document.getElementById("pendRows").innerHTML = rows.map(p => {
     const kind = {rate_change:"报价变更", po:"PO 新增", po_status:"PO 改状态"}[p.kind] || p.kind;
     const d = p.payload; let c = "";
-    if (p.kind==="rate_change") c = `${esc(d.task_type)} 新费率 ${d.new_rate}（${esc(d.reason)||"—"}）`;
-    else if (p.kind==="po") c = `${esc(d.settlement_month)} ${esc(d.role)} ${d.word_count}×${d.rate} ${esc(d.currency)}`;
+    if (p.kind==="rate_change") c = `${langPair(d)} ${esc(d.task_type)} 新费率 ${d.new_rate}（${esc(d.reason)||"—"}）`;
+    else if (p.kind==="po") c = `${esc(d.settlement_month)} ${langPair(d)} ${esc(d.role)} ${d.word_count}×${d.rate} ${esc(d.currency)}`;
     else if (p.kind==="po_status") c = `PO#${d.pid} → ${esc(d.status)}`;
     return `<tr><td>${esc(p.created_at)}</td><td>${esc(p.created_by)}</td><td>${kind}</td><td>${esc(p.translator_name)||"—"}</td><td>${c}</td>
       <td><button class="btn-link" onclick="approvePend(${p.id})">批准</button><button class="btn-link danger" onclick="rejectPend(${p.id})">驳回</button></td></tr>`;
@@ -620,6 +1003,13 @@ async function loadPending() {
 async function approvePend(id){ try{ await api("POST",`/api/pending/${id}/approve`); loadPending(); load(); }catch(e){} }
 async function rejectPend(id){ try{ await api("POST",`/api/pending/${id}/reject`); loadPending(); }catch(e){} }
 
+if (document.addEventListener) {
+  document.addEventListener("click", e => { if (!e.target.closest(".lang-combo")) closeLangMenus(); });
+  document.addEventListener("scroll", () => document.querySelectorAll(".lang-combo.open").forEach(positionLangMenu), true);
+}
+if (typeof window !== "undefined" && window.addEventListener) {
+  window.addEventListener("resize", () => document.querySelectorAll(".lang-combo.open").forEach(positionLangMenu));
+}
 document.getElementById("search").addEventListener("input", render);
 switchRole();   // 默认以资源端登录并加载
 </script>
