@@ -1,0 +1,12 @@
+.venv
+__pycache__
+*.pyc
+app.db
+.key
+server.log
+archive
+docs
+素材
+.git
+*.md
+!README.md

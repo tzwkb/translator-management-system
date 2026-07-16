@@ -1,0 +1,13 @@
+name: translator-management-system
+
+services:
+  app:
+    build: .
+    ports:
+      - "8000:8000"
+    env_file:
+      - ./data/.env
+    volumes:
+      - ./data/app.db:/app/backend/app.db
+    environment:
+      - TOKEN_TTL=${TOKEN_TTL:-28800}
