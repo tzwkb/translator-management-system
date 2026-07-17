@@ -102,6 +102,15 @@ def start_isolated_server():
     env["JWT_SECRET"] = "acceptance-test-secret"
     env["AES_KEY"] = "0" * 64
     env["TOKEN_TTL"] = "3600"
+    migration = subprocess.run(
+        [sys.executable, "-m", "alembic", "-c", "alembic.ini", "upgrade", "head"],
+        cwd=backend_dir,
+        env=env,
+        capture_output=True,
+        text=True,
+    )
+    if migration.returncode:
+        raise RuntimeError(migration.stdout + migration.stderr)
     SERVER = subprocess.Popen(
         [sys.executable, "-m", "uvicorn", "app.main:app", "--host", "127.0.0.1", "--port", str(port)],
         cwd=backend_dir,

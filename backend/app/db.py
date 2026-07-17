@@ -14,7 +14,8 @@ class Base(DeclarativeBase):
     pass
 
 
-def ensure_schema():
+def prepare_legacy_schema_for_baseline():
+    """One-time cleanup for an unversioned legacy database before Alembic stamping."""
     columns = {
         "language_pairs": {
             "translation_rate": "NUMERIC(10, 2)",
@@ -125,6 +126,10 @@ def ensure_schema():
                     """), {"created_by": row["created_by"], "idempotency_key": key,
                              "request_hash": migrated_request_hash,
                              "pending_change_id": row["id"]})
+            conn.execute(text("""
+                CREATE INDEX IF NOT EXISTS ix_pending_changes_payload_hash
+                ON pending_changes(payload_hash)
+            """))
             conn.execute(text("""
                 CREATE UNIQUE INDEX IF NOT EXISTS ux_pending_actor_idempotency
                 ON pending_changes(created_by, idempotency_key)

@@ -1,6 +1,7 @@
 fastapi
 uvicorn
 sqlalchemy
+alembic==1.18.5
 cryptography
 openpyxl
 python-multipart

@@ -80,14 +80,18 @@ def check_schema_upgrade(tmpdir):
     original_engine = db.engine
     db.engine = upgrade_engine
     try:
-        db.ensure_schema()
+        db.prepare_legacy_schema_for_baseline()
     finally:
         db.engine = original_engine
     inspector = inspect(upgrade_engine)
     columns = {item["name"] for item in inspector.get_columns("pending_changes")}
     indexes = {item["name"] for item in inspector.get_indexes("pending_changes")}
     assert {"idempotency_key", "request_hash", "payload_hash"}.issubset(columns)
-    assert {"ux_pending_actor_idempotency", "ux_pending_active_fingerprint"}.issubset(indexes)
+    assert {
+        "ix_pending_changes_payload_hash",
+        "ux_pending_actor_idempotency",
+        "ux_pending_active_fingerprint",
+    }.issubset(indexes)
     assert "pending_idempotency" in inspector.get_table_names()
     request_payload = {"source_lang": "ZH", "target_lang": "EN", "new_rate": 180}
     request_hash = pending_request_hash("rate_change", 1, request_payload)
@@ -172,7 +176,7 @@ def check_concurrent_pending(tmpdir, keys):
     original_engine = db.engine
     db.engine = engine
     try:
-        db.ensure_schema()
+        db.prepare_legacy_schema_for_baseline()
     finally:
         db.engine = original_engine
     barrier = threading.Barrier(2)

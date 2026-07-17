@@ -1,21 +1,24 @@
-"""应用入口：建表、写种子、挂路由、发前端页面。
+"""应用入口：写种子、挂路由、发前端页面。
 
 启动：backend/ 目录下 `uvicorn app.main:app --port 8000`，或 `python -m app.main`。
 """
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI
 from fastapi.responses import FileResponse
 
 from . import config
-from . import models  # noqa: F401  确保模型注册到 Base
-from .db import Base, engine, ensure_schema
 from .routers import router
 from .seed import seed
 
-Base.metadata.create_all(engine)
-ensure_schema()
-seed()
 
-app = FastAPI(title="译员管理系统")
+@asynccontextmanager
+async def lifespan(_app):
+    seed()
+    yield
+
+
+app = FastAPI(title="译员管理系统", lifespan=lifespan)
 app.include_router(router)
 
 

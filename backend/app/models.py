@@ -2,8 +2,8 @@
 from datetime import datetime
 from typing import Optional
 
-from sqlalchemy import (BigInteger, Boolean, DateTime, ForeignKey, Integer,
-                        LargeBinary, Numeric, String, Text, UniqueConstraint)
+from sqlalchemy import (BigInteger, Boolean, DateTime, ForeignKey, Index, Integer,
+                        LargeBinary, Numeric, String, Text, UniqueConstraint, text)
 from sqlalchemy.orm import Mapped, mapped_column
 
 from .db import Base
@@ -320,6 +320,12 @@ class AuditLog(Base):
 
 class PendingChange(Base):
     __tablename__ = "pending_changes"
+    __table_args__ = (
+        Index("ux_pending_actor_idempotency", "created_by", "idempotency_key",
+              unique=True, sqlite_where=text("idempotency_key IS NOT NULL")),
+        Index("ux_pending_active_fingerprint", "payload_hash", unique=True,
+              sqlite_where=text("status = 'pending' AND payload_hash IS NOT NULL")),
+    )
     id: Mapped[int] = mapped_column(primary_key=True)
     created_by: Mapped[Optional[str]] = mapped_column(String(50))
     kind: Mapped[Optional[str]] = mapped_column(String(30))
