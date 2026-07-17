@@ -27,3 +27,4 @@ docs/
 
 # Local design-session runtime
 .superpowers/
+.worktrees/
