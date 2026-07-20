@@ -126,7 +126,7 @@ def check_docker_files_package_required_assets_without_secrets():
     assert "./data:/data" in compose
     assert "sqlite:////data/app.db" in compose
     assert "TOKEN_TTL:" not in compose
-    assert "sites-demo/" in dockerignore_patterns
+    assert "sites-demo/" not in dockerignore_patterns
 
 
 def main():
