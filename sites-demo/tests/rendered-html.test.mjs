@@ -31,7 +31,11 @@ test("build packages Sites hosting metadata, D1 migration, worker, and social im
     access(new URL("../dist/client/og.png", import.meta.url)),
   ]);
   const hosting = JSON.parse(await readFile(new URL("../dist/.openai/hosting.json", import.meta.url), "utf8"));
-  assert.deepEqual(hosting, { d1: "DB", r2: null });
+  assert.deepEqual(hosting, {
+    project_id: "appgprj_6a5db4834ed08191af5037da162d68f6",
+    d1: "DB",
+    r2: null,
+  });
   await assert.rejects(access(new URL("../app/_sites-preview", import.meta.url)));
   const packageJson = await readFile(new URL("../package.json", import.meta.url), "utf8");
   assert.doesNotMatch(packageJson, /react-loading-skeleton/);
