@@ -21,6 +21,7 @@ docs/
 素材/
 archive/
 translator-mgmt-agent/
+sites-demo/
 backend/tests/
 frontend/tests/
 .DS_Store

@@ -88,6 +88,19 @@ test("validates onboarding dates by UTC calendar round-trip", () => {
   );
 });
 
+test("rejects XML 1.0 forbidden control characters in shared text validation", () => {
+  assert.throws(
+    () => normalizeTranslatorInput({
+      name: "林\u0001夏",
+      email: "linxia@example.test",
+      nativeLanguage: "简体中文",
+      status: "active",
+      onboardedAt: "2026-07-20",
+    }),
+    /姓名.*控制字符/,
+  );
+});
+
 test("uses the same normalized schema for proposals and rejects paid PO proposals", () => {
   const direct = normalizeRateInput({
     translatorId: " tr-1 ",

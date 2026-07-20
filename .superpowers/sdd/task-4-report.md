@@ -200,3 +200,24 @@ git diff --check
 - TypeScript 和 ESLint 均退出码 `0`。
 - vinext build 成功，构建产物测试 `2/2` 通过；Worker、Sites metadata、D1 迁移和社交图产物均存在且非空。
 - `git diff --check` 通过。`npm audit --omit=dev` 的 2 项 moderate 继续按复审要求保留，未执行破坏性强制降级。
+
+## 最终全分支审查修复（2026-07-20）
+
+### RED 证据
+
+- 在 Docker 静态启动测试增加构建上下文断言后，测试因 `.dockerignore` 不含 `sites-demo/` 而失败。
+- 在 Sites 定向测试中加入 `U+0001` 共享文本校验和真实 `.xlsx` 解压/worksheet XML 解析后，结果为 `7 pass / 2 fail`：入口未拒绝禁止控制字符，生成的 worksheet 仍包含 `U+0001`。
+
+### GREEN 实现
+
+- 根 `.dockerignore` 新增 `sites-demo/`，传统 Docker/Compose 构建不再扫描 Sites 的 `node_modules`、`dist`、`.wrangler` 或 D1 本地状态。
+- `normalizedText()` 统一拒绝 XML 1.0 禁止的 C0 控制字符及 `U+FFFE/U+FFFF`。
+- `xmlEscape()` 在转义前对历史/外部数据做防御性替换，保证旧 D1 数据也不会生成非法 worksheet。
+- 测试用 `fflate` 解压实际 `.xlsx`，然后对 `xl/worksheets/sheet1.xml` 执行 `fast-xml-parser` XMLValidator 和 XMLParser，同时确认禁止字符已移除。`fast-xml-parser@5.10.1` 仅作为 devDependency。
+
+### 最终验证
+
+- `python3 backend/tests/test_docker_startup.py`：通过。
+- `npm test`：Sites TypeScript 单测 `31/31` 通过；vinext build 成功，构建产物测试 `2/2` 通过。
+- `npx tsc --noEmit`、`npm run lint`、构建产物存在性检查和 `git diff --check` 均通过。
+- `npm audit --omit=dev` 仍为原有 2 项 Next 内嵌 PostCSS moderate；未执行破坏性 `--force` 降级。

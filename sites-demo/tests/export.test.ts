@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { unzipSync, strFromU8 } from "fflate";
+import { XMLParser, XMLValidator } from "fast-xml-parser";
 import { buildExportSheets, createXlsx } from "../lib/excel";
 
 const translators = [
@@ -55,4 +56,19 @@ test("creates a standards-based xlsx zip with both worksheets", () => {
   assert.ok(files["xl/worksheets/sheet2.xml"]);
   assert.match(strFromU8(files["xl/workbook.xml"]), /译员/);
   assert.match(strFromU8(files["xl/workbook.xml"]), /PO/);
+});
+
+test("unzipped worksheet XML remains parseable with legacy control characters", () => {
+  const legacyTranslators = [
+    { ...translators[0], name: "林\u0001夏" },
+  ];
+  const files = unzipSync(
+    createXlsx(buildExportSheets(legacyTranslators, purchaseOrders)),
+  );
+  const worksheetXml = strFromU8(files["xl/worksheets/sheet1.xml"]);
+
+  assert.equal(XMLValidator.validate(worksheetXml), true);
+  const parsed = new XMLParser({ ignoreAttributes: false }).parse(worksheetXml);
+  assert.ok(parsed.worksheet.sheetData.row);
+  assert.doesNotMatch(worksheetXml, /\u0001/u);
 });

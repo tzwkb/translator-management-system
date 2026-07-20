@@ -9,6 +9,12 @@ import type {
 
 export const MAX_WORD_COUNT = 100_000_000;
 export const MAX_RATE_MICROS = 100_000_000;
+const XML_10_FORBIDDEN_CHARACTER = /[\u0000-\u0008\u000B\u000C\u000E-\u001F\uFFFE\uFFFF]/u;
+const XML_10_FORBIDDEN_CHARACTERS = /[\u0000-\u0008\u000B\u000C\u000E-\u001F\uFFFE\uFFFF]/gu;
+
+export function sanitizeXml10Text(value: string): string {
+  return value.replace(XML_10_FORBIDDEN_CHARACTERS, "\uFFFD");
+}
 
 function record(value: unknown): Record<string, unknown> {
   if (typeof value !== "object" || value === null) {
@@ -28,6 +34,9 @@ export function normalizedText(
   const result = value.trim();
   if (result.length > maxLength) {
     throw new ValidationError(`${label}过长`);
+  }
+  if (XML_10_FORBIDDEN_CHARACTER.test(result)) {
+    throw new ValidationError(`${label}包含不支持的控制字符`);
   }
   return result;
 }

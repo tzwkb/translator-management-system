@@ -10,6 +10,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[2]
 ENTRYPOINT = PROJECT_ROOT / "backend" / "docker-entrypoint.sh"
 DOCKERFILE = PROJECT_ROOT / "Dockerfile"
 COMPOSE_FILE = PROJECT_ROOT / "docker-compose.yml"
+DOCKERIGNORE = PROJECT_ROOT / ".dockerignore"
 
 
 def make_fake_commands(tmpdir):
@@ -96,6 +97,11 @@ def check_successful_migration_starts_uvicorn_with_persistent_sqlite_default():
 def check_docker_files_package_required_assets_without_secrets():
     dockerfile = DOCKERFILE.read_text()
     compose = COMPOSE_FILE.read_text()
+    dockerignore_patterns = {
+        line.strip()
+        for line in DOCKERIGNORE.read_text().splitlines()
+        if line.strip() and not line.lstrip().startswith("#")
+    }
     assert "FROM python:3.12-slim" in dockerfile
     assert "COPY backend/alembic.ini backend/" in dockerfile
     assert "COPY backend/migrations/ backend/migrations/" in dockerfile
@@ -108,6 +114,7 @@ def check_docker_files_package_required_assets_without_secrets():
     assert "./data:/data" in compose
     assert "sqlite:////data/app.db" in compose
     assert "TOKEN_TTL:" not in compose
+    assert "sites-demo/" in dockerignore_patterns
 
 
 def main():

@@ -1,5 +1,6 @@
 import { strToU8, zipSync } from "fflate";
 import { formatCurrency } from "./money";
+import { sanitizeXml10Text } from "./validation";
 import type { PurchaseOrder, Translator } from "./types";
 
 export type ExportSheet = {
@@ -46,7 +47,7 @@ export function buildExportSheets(
 }
 
 function xmlEscape(value: string | number): string {
-  return String(value)
+  return sanitizeXml10Text(String(value))
     .replaceAll("&", "&amp;")
     .replaceAll("<", "&lt;")
     .replaceAll(">", "&gt;")
