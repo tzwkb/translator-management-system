@@ -8,6 +8,7 @@ import type {
   Translator,
   TranslatorStatus,
 } from "../lib/types";
+import { UnprocessableEntityError } from "../lib/errors";
 
 type D1Row = Record<string, unknown>;
 
@@ -50,10 +51,16 @@ export function mapPoRow(row: D1Row): PurchaseOrder {
 }
 
 export function mapApprovalRow(row: D1Row): Approval {
+  let payload: Approval["payload"];
+  try {
+    payload = JSON.parse(String(row.payload_json)) as Approval["payload"];
+  } catch {
+    throw new UnprocessableEntityError("审核提案无法解析");
+  }
   return {
     id: String(row.id),
     kind: String(row.kind) as ApprovalKind,
-    payload: JSON.parse(String(row.payload_json)) as Approval["payload"],
+    payload,
     submittedBy: String(row.submitted_by),
     status: String(row.status) as ApprovalStatus,
     reviewer: row.reviewer === null ? null : String(row.reviewer),

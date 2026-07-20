@@ -1,7 +1,7 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "b63375cc-a055-4781-9254-537580b71c30",
+  "id": "6c98355b-ab96-4ce6-ad8b-fecf00f95e94",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "tables": {
     "approvals": {
@@ -69,13 +69,44 @@
           "primaryKey": false,
           "notNull": false,
           "autoincrement": false
+        },
+        "review_token": {
+          "name": "review_token",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
         }
       },
-      "indexes": {},
+      "indexes": {
+        "approvals_review_token_unique": {
+          "name": "approvals_review_token_unique",
+          "columns": [
+            "review_token"
+          ],
+          "isUnique": true
+        },
+        "approvals_status_idx": {
+          "name": "approvals_status_idx",
+          "columns": [
+            "status"
+          ],
+          "isUnique": false
+        }
+      },
       "foreignKeys": {},
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
-      "checkConstraints": {}
+      "checkConstraints": {
+        "approvals_kind_check": {
+          "name": "approvals_kind_check",
+          "value": "\"approvals\".\"kind\" IN ('rate', 'po')"
+        },
+        "approvals_status_check": {
+          "name": "approvals_status_check",
+          "value": "\"approvals\".\"status\" IN ('pending', 'approved', 'rejected')"
+        }
+      }
     },
     "purchase_orders": {
       "name": "purchase_orders",
@@ -165,6 +196,13 @@
             "po_number"
           ],
           "isUnique": true
+        },
+        "purchase_orders_status_idx": {
+          "name": "purchase_orders_status_idx",
+          "columns": [
+            "status"
+          ],
+          "isUnique": false
         }
       },
       "foreignKeys": {
@@ -184,7 +222,24 @@
       },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
-      "checkConstraints": {}
+      "checkConstraints": {
+        "purchase_orders_status_check": {
+          "name": "purchase_orders_status_check",
+          "value": "\"purchase_orders\".\"status\" IN ('draft', 'confirmed', 'paid')"
+        },
+        "purchase_orders_word_count_check": {
+          "name": "purchase_orders_word_count_check",
+          "value": "\"purchase_orders\".\"word_count\" BETWEEN 0 AND 100000000"
+        },
+        "purchase_orders_rate_check": {
+          "name": "purchase_orders_rate_check",
+          "value": "\"purchase_orders\".\"unit_rate_micros\" BETWEEN 0 AND 100000000"
+        },
+        "purchase_orders_amount_check": {
+          "name": "purchase_orders_amount_check",
+          "value": "\"purchase_orders\".\"amount_cents\" >= 0"
+        }
+      }
     },
     "rates": {
       "name": "rates",
@@ -259,7 +314,12 @@
       },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
-      "checkConstraints": {}
+      "checkConstraints": {
+        "rates_rate_micros_check": {
+          "name": "rates_rate_micros_check",
+          "value": "\"rates\".\"rate_micros\" BETWEEN 0 AND 100000000"
+        }
+      }
     },
     "translators": {
       "name": "translators",
@@ -319,7 +379,12 @@
       "foreignKeys": {},
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
-      "checkConstraints": {}
+      "checkConstraints": {
+        "translators_status_check": {
+          "name": "translators_status_check",
+          "value": "\"translators\".\"status\" IN ('active', 'inactive')"
+        }
+      }
     }
   },
   "views": {},

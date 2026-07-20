@@ -37,11 +37,11 @@ test("allows only boss to resolve a pending approval", () => {
 test("rejects incomplete approval payloads before they enter the queue", () => {
   assert.throws(
     () => validateApprovalPayload("rate", { translatorId: "tr-1" }),
-    /费率提案不完整/,
+    /语言对不能为空/,
   );
   assert.throws(
     () => validateApprovalPayload("po", { poNumber: "PO-1", wordCount: -1 }),
-    /PO 提案不完整/,
+    /月份不能为空/,
   );
 });
 
@@ -54,4 +54,8 @@ test("calculates PO amount in cents from a decimal per-word rate", () => {
 test("rejects invalid money inputs", () => {
   assert.throws(() => parseRateMicros("-0.1"), /rate/i);
   assert.throws(() => calculateAmountCents(-1, 100_000), /word count/i);
+  assert.throws(
+    () => calculateAmountCents(Number.MAX_SAFE_INTEGER, 100_000),
+    /word count/i,
+  );
 });

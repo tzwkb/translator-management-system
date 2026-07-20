@@ -1,4 +1,12 @@
 import { calculateAmountCents } from "../lib/money";
+import {
+  ConflictError,
+  DomainError,
+  NotFoundError,
+  UnprocessableEntityError,
+  ValidationError,
+} from "../lib/errors";
+import { validateApprovalPayload } from "../lib/approvals";
 import type {
   Approval,
   ApprovalStatus,
@@ -21,12 +29,14 @@ export interface D1StatementLike {
   bind(...values: unknown[]): D1StatementLike;
   first<T>(): Promise<T | null>;
   all<T>(): Promise<{ results: T[] }>;
-  run(): Promise<unknown>;
+  run(): Promise<D1ResultLike>;
 }
+
+export type D1ResultLike = { meta?: { changes?: number } };
 
 export interface D1DatabaseLike {
   prepare(sql: string): D1StatementLike;
-  batch(statements: D1StatementLike[]): Promise<unknown[]>;
+  batch(statements: D1StatementLike[]): Promise<D1ResultLike[]>;
 }
 
 const schemaStatements = [
@@ -42,7 +52,7 @@ const schemaStatements = [
     id TEXT PRIMARY KEY,
     translator_id TEXT NOT NULL REFERENCES translators(id),
     language_pair TEXT NOT NULL,
-    rate_micros INTEGER NOT NULL,
+    rate_micros INTEGER NOT NULL CHECK (rate_micros BETWEEN 0 AND 100000000),
     currency TEXT NOT NULL,
     updated_at TEXT NOT NULL,
     UNIQUE(translator_id, language_pair)
@@ -53,9 +63,9 @@ const schemaStatements = [
     translator_id TEXT NOT NULL REFERENCES translators(id),
     month TEXT NOT NULL,
     language_pair TEXT NOT NULL,
-    word_count INTEGER NOT NULL,
-    unit_rate_micros INTEGER NOT NULL,
-    amount_cents INTEGER NOT NULL,
+    word_count INTEGER NOT NULL CHECK (word_count BETWEEN 0 AND 100000000),
+    unit_rate_micros INTEGER NOT NULL CHECK (unit_rate_micros BETWEEN 0 AND 100000000),
+    amount_cents INTEGER NOT NULL CHECK (amount_cents >= 0),
     currency TEXT NOT NULL,
     status TEXT NOT NULL CHECK (status IN ('draft', 'confirmed', 'paid')),
     created_at TEXT NOT NULL
@@ -69,7 +79,8 @@ const schemaStatements = [
     reviewer TEXT,
     note TEXT,
     created_at TEXT NOT NULL,
-    reviewed_at TEXT
+    reviewed_at TEXT,
+    review_token TEXT UNIQUE
   )`,
   "CREATE INDEX IF NOT EXISTS purchase_orders_status_idx ON purchase_orders(status)",
   "CREATE INDEX IF NOT EXISTS approvals_status_idx ON approvals(status)",
@@ -149,82 +160,127 @@ export async function loadWorkspace(db: D1DatabaseLike): Promise<WorkspaceData> 
     metrics: {
       translatorCount: translators.length,
       languagePairCount: new Set(rates.map((item) => item.languagePair)).size,
-      pendingAmountCents: purchaseOrders
-        .filter((item) => item.status !== "paid")
-        .reduce((total, item) => total + item.amountCents, 0),
+      pendingAmounts: summarizePendingAmounts(purchaseOrders),
       pendingApprovalCount: approvals.filter((item) => item.status === "pending").length,
     },
   };
+}
+
+export function summarizePendingAmounts(
+  purchaseOrders: PurchaseOrder[],
+): Array<{ currency: string; amountCents: number }> {
+  const totals = new Map<string, number>();
+  for (const item of purchaseOrders) {
+    if (item.status === "paid") continue;
+    totals.set(item.currency, (totals.get(item.currency) ?? 0) + item.amountCents);
+  }
+  return [...totals.entries()]
+    .sort(([left], [right]) => left.localeCompare(right))
+    .map(([currency, amountCents]) => ({ currency, amountCents }));
+}
+
+function mutationError(error: unknown): unknown {
+  if (error instanceof DomainError) return error;
+  const message = error instanceof Error ? error.message : "";
+  if (/UNIQUE constraint failed/i.test(message)) {
+    return new ConflictError("记录与现有数据冲突");
+  }
+  if (/FOREIGN KEY constraint failed/i.test(message)) {
+    return new ValidationError("关联的译员不存在");
+  }
+  return error;
+}
+
+function changedRows(result: D1ResultLike): number {
+  const changes = result.meta?.changes;
+  return Number.isSafeInteger(changes) ? Number(changes) : 0;
 }
 
 export async function createTranslator(
   db: D1DatabaseLike,
   translator: Translator,
 ): Promise<void> {
-  await db
-    .prepare("INSERT INTO translators (id, name, email, native_language, status, onboarded_at) VALUES (?, ?, ?, ?, ?, ?)")
-    .bind(
-      translator.id,
-      translator.name,
-      translator.email,
-      translator.nativeLanguage,
-      translator.status,
-      translator.onboardedAt,
-    )
-    .run();
+  try {
+    await db
+      .prepare("INSERT INTO translators (id, name, email, native_language, status, onboarded_at) VALUES (?, ?, ?, ?, ?, ?)")
+      .bind(
+        translator.id,
+        translator.name,
+        translator.email,
+        translator.nativeLanguage,
+        translator.status,
+        translator.onboardedAt,
+      )
+      .run();
+  } catch (error) {
+    throw mutationError(error);
+  }
 }
 
 export async function updateTranslator(
   db: D1DatabaseLike,
   translator: Translator,
 ): Promise<void> {
-  await db
-    .prepare("UPDATE translators SET name = ?, email = ?, native_language = ?, status = ?, onboarded_at = ? WHERE id = ?")
-    .bind(
-      translator.name,
-      translator.email,
-      translator.nativeLanguage,
-      translator.status,
-      translator.onboardedAt,
-      translator.id,
-    )
-    .run();
+  try {
+    const result = await db
+      .prepare("UPDATE translators SET name = ?, email = ?, native_language = ?, status = ?, onboarded_at = ? WHERE id = ?")
+      .bind(
+        translator.name,
+        translator.email,
+        translator.nativeLanguage,
+        translator.status,
+        translator.onboardedAt,
+        translator.id,
+      )
+      .run();
+    if (changedRows(result) !== 1) throw new NotFoundError("未找到译员");
+  } catch (error) {
+    throw mutationError(error);
+  }
 }
 
 export async function upsertRate(db: D1DatabaseLike, rate: Rate): Promise<void> {
-  await db
-    .prepare("INSERT INTO rates (id, translator_id, language_pair, rate_micros, currency, updated_at) VALUES (?, ?, ?, ?, ?, ?) ON CONFLICT(translator_id, language_pair) DO UPDATE SET rate_micros = excluded.rate_micros, currency = excluded.currency, updated_at = excluded.updated_at")
-    .bind(
-      rate.id,
-      rate.translatorId,
-      rate.languagePair,
-      rate.rateMicros,
-      rate.currency,
-      rate.updatedAt,
-    )
-    .run();
+  try {
+    await db
+      .prepare("INSERT INTO rates (id, translator_id, language_pair, rate_micros, currency, updated_at) VALUES (?, ?, ?, ?, ?, ?) ON CONFLICT(translator_id, language_pair) DO UPDATE SET rate_micros = excluded.rate_micros, currency = excluded.currency, updated_at = excluded.updated_at")
+      .bind(
+        rate.id,
+        rate.translatorId,
+        rate.languagePair,
+        rate.rateMicros,
+        rate.currency,
+        rate.updatedAt,
+      )
+      .run();
+  } catch (error) {
+    throw mutationError(error);
+  }
 }
 
 export async function createPurchaseOrder(
   db: D1DatabaseLike,
   po: PurchaseOrder,
 ): Promise<void> {
-  await db
-    .prepare("INSERT INTO purchase_orders (id, po_number, translator_id, month, language_pair, word_count, unit_rate_micros, amount_cents, currency, status, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
-    .bind(
-      po.id,
-      po.poNumber,
-      po.translatorId,
-      po.month,
-      po.languagePair,
-      po.wordCount,
-      po.unitRateMicros,
-      po.amountCents,
-      po.currency,
-      po.status,
-      po.createdAt,
-    )
-    .run();
+  try {
+    await db
+      .prepare("INSERT INTO purchase_orders (id, po_number, translator_id, month, language_pair, word_count, unit_rate_micros, amount_cents, currency, status, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
+      .bind(
+        po.id,
+        po.poNumber,
+        po.translatorId,
+        po.month,
+        po.languagePair,
+        po.wordCount,
+        po.unitRateMicros,
+        po.amountCents,
+        po.currency,
+        po.status,
+        po.createdAt,
+      )
+      .run();
+  } catch (error) {
+    throw mutationError(error);
+  }
 }
 
 export async function updatePoStatus(
@@ -232,10 +288,11 @@ export async function updatePoStatus(
   id: string,
   status: PoStatus,
 ): Promise<void> {
-  await db
+  const result = await db
     .prepare("UPDATE purchase_orders SET status = ? WHERE id = ?")
     .bind(status, id)
     .run();
+  if (changedRows(result) !== 1) throw new NotFoundError("未找到 PO");
 }
 
 export async function createApproval(
@@ -269,52 +326,79 @@ export async function reviewApproval(
     .prepare("SELECT * FROM approvals WHERE id = ?")
     .bind(id)
     .first<Record<string, unknown>>();
-  if (!row) throw new Error("未找到审核项");
+  if (!row) throw new NotFoundError("未找到审核项");
 
   const approval = mapApprovalRow(row);
-  if (approval.status !== "pending") throw new Error("该审核项已处理");
+  if (approval.status !== "pending") throw new ConflictError("该审核项已处理");
+
+  let payload: RateProposal | PoProposal | null = null;
+  if (status === "approved") {
+    try {
+      payload = validateApprovalPayload(approval.kind, approval.payload);
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : "内容无效";
+      throw new UnprocessableEntityError(`审核提案无法处理：${detail}`);
+    }
+  }
 
   const now = new Date().toISOString();
-  const reviewStatement = db
-    .prepare("UPDATE approvals SET status = ?, reviewer = ?, note = ?, reviewed_at = ? WHERE id = ? AND status = 'pending'")
-    .bind(status, reviewer, note, now, id);
+  const reviewToken = crypto.randomUUID();
+  const claimStatement = db
+    .prepare("UPDATE approvals SET review_token = ? WHERE id = ? AND status = 'pending' AND review_token IS NULL")
+    .bind(reviewToken, id);
+  const finalizeStatement = db
+    .prepare("UPDATE approvals SET status = ?, reviewer = ?, note = ?, reviewed_at = ? WHERE id = ? AND status = 'pending' AND review_token = ?")
+    .bind(status, reviewer, note, now, id, reviewToken);
 
-  if (status === "rejected") {
-    await db.batch([reviewStatement]);
-    return;
-  }
+  const statements: D1StatementLike[] = [claimStatement];
 
-  if (approval.kind === "rate") {
-    const payload = approval.payload as RateProposal;
+  if (status === "approved" && approval.kind === "rate") {
+    const ratePayload = payload as RateProposal;
     const rateStatement = db
-      .prepare("INSERT INTO rates (id, translator_id, language_pair, rate_micros, currency, updated_at) VALUES (?, ?, ?, ?, ?, ?) ON CONFLICT(translator_id, language_pair) DO UPDATE SET rate_micros = excluded.rate_micros, currency = excluded.currency, updated_at = excluded.updated_at")
+      .prepare("INSERT INTO rates (id, translator_id, language_pair, rate_micros, currency, updated_at) SELECT ?, ?, ?, ?, ?, ? WHERE EXISTS (SELECT 1 FROM approvals WHERE id = ? AND status = 'pending' AND review_token = ?) ON CONFLICT(translator_id, language_pair) DO UPDATE SET rate_micros = excluded.rate_micros, currency = excluded.currency, updated_at = excluded.updated_at")
       .bind(
         `rate-${crypto.randomUUID()}`,
-        payload.translatorId,
-        payload.languagePair,
-        payload.rateMicros,
-        payload.currency,
+        ratePayload.translatorId,
+        ratePayload.languagePair,
+        ratePayload.rateMicros,
+        ratePayload.currency,
         now,
+        id,
+        reviewToken,
       );
-    await db.batch([rateStatement, reviewStatement]);
-    return;
+    statements.push(rateStatement);
   }
 
-  const payload = approval.payload as PoProposal;
-  const poStatement = db
-    .prepare("INSERT INTO purchase_orders (id, po_number, translator_id, month, language_pair, word_count, unit_rate_micros, amount_cents, currency, status, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
-    .bind(
-      `po-${crypto.randomUUID()}`,
-      payload.poNumber,
-      payload.translatorId,
-      payload.month,
-      payload.languagePair,
-      payload.wordCount,
-      payload.unitRateMicros,
-      calculateAmountCents(payload.wordCount, payload.unitRateMicros),
-      payload.currency,
-      payload.status,
-      now,
-    );
-  await db.batch([poStatement, reviewStatement]);
+  if (status === "approved" && approval.kind === "po") {
+    const poPayload = payload as PoProposal;
+    const poStatement = db
+      .prepare("INSERT INTO purchase_orders (id, po_number, translator_id, month, language_pair, word_count, unit_rate_micros, amount_cents, currency, status, created_at) SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ? WHERE EXISTS (SELECT 1 FROM approvals WHERE id = ? AND status = 'pending' AND review_token = ?)")
+      .bind(
+        `po-${crypto.randomUUID()}`,
+        poPayload.poNumber,
+        poPayload.translatorId,
+        poPayload.month,
+        poPayload.languagePair,
+        poPayload.wordCount,
+        poPayload.unitRateMicros,
+        calculateAmountCents(poPayload.wordCount, poPayload.unitRateMicros),
+        poPayload.currency,
+        poPayload.status,
+        now,
+        id,
+        reviewToken,
+      );
+    statements.push(poStatement);
+  }
+
+  statements.push(finalizeStatement);
+  let results: D1ResultLike[];
+  try {
+    results = await db.batch(statements);
+  } catch (error) {
+    throw mutationError(error);
+  }
+  if (changedRows(results[0] ?? {}) !== 1) {
+    throw new ConflictError("该审核项已被其他请求处理");
+  }
 }

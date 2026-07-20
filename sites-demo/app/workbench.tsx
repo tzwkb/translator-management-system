@@ -3,8 +3,8 @@
 import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import { canPerform } from "../lib/roles";
 import { calculateAmountCents, formatCurrency, formatRate, parseRateMicros } from "../lib/money";
+import { formatApprovalSummary } from "../lib/approval-display";
 import type {
-  Approval,
   DemoRole,
   PoStatus,
   PurchaseOrder,
@@ -23,7 +23,7 @@ const emptyWorkspace: WorkspaceData = {
   metrics: {
     translatorCount: 0,
     languagePairCount: 0,
-    pendingAmountCents: 0,
+    pendingAmounts: [],
     pendingApprovalCount: 0,
   },
 };
@@ -45,17 +45,6 @@ const roleLabels: Record<DemoRole, string> = {
 
 function translatorName(translators: Translator[], id: string): string {
   return translators.find((item) => item.id === id)?.name ?? "未找到译员";
-}
-
-function approvalSummary(approval: Approval, translators: Translator[]): string {
-  const payload = approval.payload;
-  if (approval.kind === "rate" && "rateMicros" in payload) {
-    return `${translatorName(translators, payload.translatorId)} · ${payload.languagePair} · ${formatRate(payload.rateMicros)} ${payload.currency}/字`;
-  }
-  if ("poNumber" in payload) {
-    return `${payload.poNumber} · ${translatorName(translators, payload.translatorId)} · ${payload.wordCount.toLocaleString("zh-CN")} 字`;
-  }
-  return "待审内容";
 }
 
 export function LinguaControlWorkbench() {
@@ -123,7 +112,7 @@ export function LinguaControlWorkbench() {
     return () => window.clearTimeout(timeoutId);
   }, [loadWorkspaceData]);
 
-  async function mutate(path: string, method: "POST" | "PATCH", body: unknown, success: string) {
+  async function mutate(path: string, method: "POST" | "PATCH", body: unknown, success: string): Promise<boolean> {
     setBusy(true);
     setFeedback(null);
     try {
@@ -136,8 +125,10 @@ export function LinguaControlWorkbench() {
       if (!response.ok) throw new Error(payload.error ?? "操作失败");
       await loadWorkspaceData();
       setFeedback({ type: "success", text: success });
+      return true;
     } catch (error) {
       setFeedback({ type: "error", text: error instanceof Error ? error.message : "操作失败" });
+      return false;
     } finally {
       setBusy(false);
     }
@@ -171,8 +162,8 @@ export function LinguaControlWorkbench() {
   async function saveTranslator(event: FormEvent) {
     event.preventDefault();
     const path = editingTranslatorId ? `/api/translators/${editingTranslatorId}` : "/api/translators";
-    await mutate(path, editingTranslatorId ? "PATCH" : "POST", translatorForm, editingTranslatorId ? "译员资料已更新" : "译员已新增");
-    setTranslatorFormOpen(false);
+    const saved = await mutate(path, editingTranslatorId ? "PATCH" : "POST", translatorForm, editingTranslatorId ? "译员资料已更新" : "译员已新增");
+    if (saved) setTranslatorFormOpen(false);
   }
 
   async function saveRate(event: FormEvent) {
@@ -303,13 +294,13 @@ export function LinguaControlWorkbench() {
             <div className="metric-ledger">
               <Metric label="在册译员" value={String(workspace.metrics.translatorCount).padStart(2, "0")} note="含停用的示例档案" />
               <Metric label="语言对" value={String(workspace.metrics.languagePairCount).padStart(2, "0")} note="按当前费率表去重" />
-              <Metric label="待付金额" value={formatCurrency(workspace.metrics.pendingAmountCents, "CNY")} note="演示口径：非已付 PO" compact />
+              <Metric label="待付金额" value={workspace.metrics.pendingAmounts.map((item) => formatCurrency(item.amountCents, item.currency)).join(" / ") || "—"} note="按币种分列，不含已付 PO" compact />
               <Metric label="待审核" value={String(workspace.metrics.pendingApprovalCount).padStart(2, "0")} note="仅 pending 状态" />
             </div>
             <article className="queue-panel">
               <div className="section-heading"><div><p className="eyebrow">流转队列</p><h2>待审摘要</h2></div><button className="text-button" onClick={() => setView("approvals")}>打开审核</button></div>
               {pendingApprovals.length ? pendingApprovals.slice(0, 3).map((approval) => (
-                <div className="queue-row" key={approval.id}><span className="kind-tag">{approval.kind === "rate" ? "费率" : "PO"}</span><div><strong>{approvalSummary(approval, workspace.translators)}</strong><span>{approval.submittedBy} · {approval.createdAt.slice(0, 10)}</span></div></div>
+                <div className="queue-row" key={approval.id}><span className="kind-tag">{approval.kind === "rate" ? "费率" : "PO"}</span><div><strong>{formatApprovalSummary(approval, workspace.translators)}</strong><span>{approval.submittedBy} · {approval.createdAt.slice(0, 10)}</span></div></div>
               )) : <EmptyState text="目前没有待审项，业务流转已清空。" />}
             </article>
           </section>
@@ -385,7 +376,7 @@ export function LinguaControlWorkbench() {
             <div className="approval-list">
               {workspace.approvals.length ? workspace.approvals.map((approval) => (
                 <article className="approval-card" key={approval.id}>
-                  <div className="approval-main"><span className="kind-tag">{approval.kind === "rate" ? "费率提案" : "PO 提案"}</span><h3>{approvalSummary(approval, workspace.translators)}</h3><p>{approval.submittedBy} · {approval.createdAt.slice(0, 16).replace("T", " ")}</p>{approval.note ? <p className="review-note">审核意见：{approval.note}</p> : null}</div>
+                  <div className="approval-main"><span className="kind-tag">{approval.kind === "rate" ? "费率提案" : "PO 提案"}</span><h3>{formatApprovalSummary(approval, workspace.translators)}</h3><p>{approval.submittedBy} · {approval.createdAt.slice(0, 16).replace("T", " ")}</p>{approval.note ? <p className="review-note">审核意见：{approval.note}</p> : null}</div>
                   <div className="approval-actions"><StatusTag status={approval.status} />{approval.status === "pending" && canReview ? <><button className="approve-button" disabled={busy} onClick={() => void mutate(`/api/approvals/${approval.id}`, "PATCH", { status: "approved", note: "核对无误，批准写入" }, "审核已批准，业务数据已写入")}>批准并写入</button><button className="reject-button" disabled={busy} onClick={() => void mutate(`/api/approvals/${approval.id}`, "PATCH", { status: "rejected", note: "信息不完整，请更正后重提" }, "审核已驳回")}>驳回</button></> : null}</div>
                 </article>
               )) : <EmptyState text="尚无审核记录。Agent 提交费率或 PO 提案后将显示在这里。" />}

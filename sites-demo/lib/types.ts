@@ -74,7 +74,7 @@ export type WorkspaceData = {
   metrics: {
     translatorCount: number;
     languagePairCount: number;
-    pendingAmountCents: number;
+    pendingAmounts: Array<{ currency: string; amountCents: number }>;
     pendingApprovalCount: number;
   };
 };

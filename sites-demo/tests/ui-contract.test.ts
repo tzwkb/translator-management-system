@@ -19,5 +19,7 @@ test("replaces the starter with the Chinese translator operations workbench", as
   assert.match(workbench, /费率/);
   assert.match(workbench, /PO/);
   assert.match(workbench, /审核/);
+  assert.match(workbench, /const saved = await mutate/);
+  assert.match(workbench, /if \(saved\) setTranslatorFormOpen\(false\)/);
   assert.doesNotMatch(page + layout + workbench, /codex-preview|SkeletonPreview/);
 });

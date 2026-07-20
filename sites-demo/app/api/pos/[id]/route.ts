@@ -1,8 +1,8 @@
 import { getDatabase } from "../../../../db";
 import { ensureDatabase, updatePoStatus } from "../../../../db/repository";
-import { errorResponse, json, roleFromRequest, ValidationError } from "../../../../lib/api";
+import { errorResponse, json, roleFromRequest } from "../../../../lib/api";
 import { assertPermission } from "../../../../lib/roles";
-import type { PoStatus } from "../../../../lib/types";
+import { normalizePoStatus } from "../../../../lib/validation";
 
 export async function PATCH(
   request: Request,
@@ -14,12 +14,10 @@ export async function PATCH(
       request.json() as Promise<Record<string, unknown>>,
       context.params,
     ]);
-    if (!["draft", "confirmed", "paid"].includes(String(body.status))) {
-      throw new ValidationError("无效的 PO 状态");
-    }
+    const status = normalizePoStatus(body.status, true);
     const db = getDatabase();
     await ensureDatabase(db);
-    await updatePoStatus(db, params.id, body.status as PoStatus);
+    await updatePoStatus(db, params.id, status);
     return json({ ok: true });
   } catch (error) {
     return errorResponse(error);
