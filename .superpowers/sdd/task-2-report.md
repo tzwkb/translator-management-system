@@ -82,3 +82,5 @@ git diff --check
 输出：`docker startup tests pass`；Compose 配置检查通过，使用临时 `data/.env` 的解析结果为 `TOKEN_TTL: "1234"`，证明该值不再被覆盖；空白检查通过。临时验证环境文件已删除。
 
 修复提交：`829a2cc3ccd7bbb9db9ff8a5a91f038600fe573f`（`fix: preserve compose token TTL override`）。
+
+后续验证：父代理已启动 Docker Desktop，并确认镜像 `translator-management-system:demo-20260720` 真实构建成功；这消除了首次报告中 Docker 守护进程未运行的环境限制。
