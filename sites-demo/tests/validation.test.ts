@@ -67,6 +67,27 @@ test("rejects invalid translator and new PO statuses instead of coercing them", 
   assert.throws(() => normalizePoInput({ ...validPo, status: "paid" }), /PO 状态无效/);
 });
 
+test("validates onboarding dates by UTC calendar round-trip", () => {
+  const translator = {
+    name: "林夏",
+    email: "linxia@example.test",
+    nativeLanguage: "简体中文",
+    status: "active",
+  };
+  assert.equal(
+    normalizeTranslatorInput({ ...translator, onboardedAt: "2024-02-29" }).onboardedAt,
+    "2024-02-29",
+  );
+  assert.throws(
+    () => normalizeTranslatorInput({ ...translator, onboardedAt: "2026-99-99" }),
+    /入库日期.*无效/,
+  );
+  assert.throws(
+    () => normalizeTranslatorInput({ ...translator, onboardedAt: "2025-02-29" }),
+    /入库日期.*无效/,
+  );
+});
+
 test("uses the same normalized schema for proposals and rejects paid PO proposals", () => {
   const direct = normalizeRateInput({
     translatorId: " tr-1 ",

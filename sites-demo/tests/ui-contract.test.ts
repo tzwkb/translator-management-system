@@ -21,5 +21,9 @@ test("replaces the starter with the Chinese translator operations workbench", as
   assert.match(workbench, /审核/);
   assert.match(workbench, /const saved = await mutate/);
   assert.match(workbench, /if \(saved\) setTranslatorFormOpen\(false\)/);
+  assert.equal(workbench.match(/max=\{MAX_RATE_PER_WORD\}/g)?.length, 2);
+  assert.match(workbench, /max=\{MAX_WORD_COUNT\}/);
+  assert.match(workbench, /safePoEstimate/);
+  assert.match(workbench, /setFeedback\(\{ type: "error", text: prepared\.error \}\)/);
   assert.doesNotMatch(page + layout + workbench, /codex-preview|SkeletonPreview/);
 });

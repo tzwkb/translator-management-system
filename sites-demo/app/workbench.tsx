@@ -2,8 +2,15 @@
 
 import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import { canPerform } from "../lib/roles";
-import { calculateAmountCents, formatCurrency, formatRate, parseRateMicros } from "../lib/money";
+import { formatCurrency, formatRate } from "../lib/money";
 import { formatApprovalSummary } from "../lib/approval-display";
+import {
+  MAX_RATE_PER_WORD,
+  preparePoSubmission,
+  prepareRateSubmission,
+  safePoEstimate,
+} from "../lib/form-safety";
+import { MAX_WORD_COUNT } from "../lib/validation";
 import type {
   DemoRole,
   PoStatus,
@@ -168,12 +175,12 @@ export function LinguaControlWorkbench() {
 
   async function saveRate(event: FormEvent) {
     event.preventDefault();
-    const payload = {
-      translatorId: rateForm.translatorId,
-      languagePair: rateForm.languagePair,
-      rateMicros: parseRateMicros(rateForm.rate),
-      currency: rateForm.currency,
-    };
+    const prepared = prepareRateSubmission(rateForm);
+    if (!prepared.ok) {
+      setFeedback({ type: "error", text: prepared.error });
+      return;
+    }
+    const payload = prepared.payload;
     if (role === "agent") {
       await mutate("/api/approvals", "POST", { kind: "rate", payload, submittedBy: "Demo Agent（示例）" }, "费率提案已提交待审");
       return;
@@ -183,16 +190,12 @@ export function LinguaControlWorkbench() {
 
   async function savePo(event: FormEvent) {
     event.preventDefault();
-    const payload = {
-      poNumber: poForm.poNumber,
-      translatorId: poForm.translatorId,
-      month: poForm.month,
-      languagePair: poForm.languagePair,
-      wordCount: Number(poForm.wordCount),
-      unitRateMicros: parseRateMicros(poForm.unitRate),
-      currency: poForm.currency,
-      status: poForm.status,
-    };
+    const prepared = preparePoSubmission(poForm);
+    if (!prepared.ok) {
+      setFeedback({ type: "error", text: prepared.error });
+      return;
+    }
+    const payload = prepared.payload;
     if (role === "agent") {
       await mutate("/api/approvals", "POST", { kind: "po", payload, submittedBy: "Demo Agent（示例）" }, "PO 提案已提交待审");
       return;
@@ -336,7 +339,7 @@ export function LinguaControlWorkbench() {
               <div className="form-grid">
                 <Field label="译员"><select required value={rateForm.translatorId} onChange={(event) => setRateForm({ ...rateForm, translatorId: event.target.value })}>{workspace.translators.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></Field>
                 <Field label="语言对"><input required value={rateForm.languagePair} onChange={(event) => setRateForm({ ...rateForm, languagePair: event.target.value })} /></Field>
-                <Field label="每字费率"><input required type="number" min="0" step="0.0001" value={rateForm.rate} onChange={(event) => setRateForm({ ...rateForm, rate: event.target.value })} /></Field>
+                <Field label="每字费率"><input required type="number" min="0" max={MAX_RATE_PER_WORD} step="0.0001" value={rateForm.rate} onChange={(event) => setRateForm({ ...rateForm, rate: event.target.value })} /></Field>
                 <Field label="币种"><select value={rateForm.currency} onChange={(event) => setRateForm({ ...rateForm, currency: event.target.value })}><option>CNY</option><option>USD</option><option>EUR</option></select></Field>
               </div>
               <button className="primary-button" disabled={busy || !rateForm.translatorId}>{role === "agent" ? "提交费率提案" : "保存费率"}</button>
@@ -356,12 +359,12 @@ export function LinguaControlWorkbench() {
                 <Field label="译员"><select required value={poForm.translatorId} onChange={(event) => setPoForm({ ...poForm, translatorId: event.target.value })}>{workspace.translators.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></Field>
                 <Field label="月份"><input required type="month" value={poForm.month} onChange={(event) => setPoForm({ ...poForm, month: event.target.value })} /></Field>
                 <Field label="语言对"><input required value={poForm.languagePair} onChange={(event) => setPoForm({ ...poForm, languagePair: event.target.value })} /></Field>
-                <Field label="字数"><input required type="number" min="0" step="1" value={poForm.wordCount} onChange={(event) => setPoForm({ ...poForm, wordCount: event.target.value })} /></Field>
-                <Field label="单价 / 字"><input required type="number" min="0" step="0.0001" value={poForm.unitRate} onChange={(event) => setPoForm({ ...poForm, unitRate: event.target.value })} /></Field>
+                <Field label="字数"><input required type="number" min="0" max={MAX_WORD_COUNT} step="1" value={poForm.wordCount} onChange={(event) => setPoForm({ ...poForm, wordCount: event.target.value })} /></Field>
+                <Field label="单价 / 字"><input required type="number" min="0" max={MAX_RATE_PER_WORD} step="0.0001" value={poForm.unitRate} onChange={(event) => setPoForm({ ...poForm, unitRate: event.target.value })} /></Field>
                 <Field label="币种"><select value={poForm.currency} onChange={(event) => setPoForm({ ...poForm, currency: event.target.value })}><option>CNY</option><option>USD</option><option>EUR</option></select></Field>
                 <Field label="初始状态"><select value={poForm.status} onChange={(event) => setPoForm({ ...poForm, status: event.target.value as PoStatus })}><option value="draft">草稿</option><option value="confirmed">已确认</option></select></Field>
               </div>
-              <div className="form-footer"><span>预计金额：<strong>{formatCurrency(calculateAmountCents(Number(poForm.wordCount || 0), parseRateMicros(poForm.unitRate || 0)), poForm.currency)}</strong></span><button className="primary-button" disabled={busy || !poForm.translatorId}>{role === "agent" ? "提交 PO 提案" : "新增 PO"}</button></div>
+              <div className="form-footer"><span>预计金额：<strong>{safePoEstimate(poForm.wordCount, poForm.unitRate, poForm.currency)}</strong></span><button className="primary-button" disabled={busy || !poForm.translatorId}>{role === "agent" ? "提交 PO 提案" : "新增 PO"}</button></div>
             </form> : <ReadOnlyNotice />}
             <DataTable columns={["PO 号", "译员 / 语言对", "月份", "字数", "金额", "状态"]} empty={workspace.purchaseOrders.length === 0}>
               {workspace.purchaseOrders.map((po: PurchaseOrder) => <tr key={po.id}><td><strong>{po.poNumber}</strong></td><td>{translatorName(workspace.translators, po.translatorId)}<small>{po.languagePair}</small></td><td>{po.month}</td><td className="number-cell">{po.wordCount.toLocaleString("zh-CN")}</td><td className="number-cell">{formatCurrency(po.amountCents, po.currency)}</td><td>{canWrite ? <select className="status-select" value={po.status} aria-label={`${po.poNumber} 状态`} onChange={(event) => void mutate(`/api/pos/${po.id}`, "PATCH", { status: event.target.value }, "PO 状态已更新")} disabled={busy}><option value="draft">草稿</option><option value="confirmed">已确认</option><option value="paid">已付</option></select> : <StatusTag status={po.status} />}</td></tr>)}

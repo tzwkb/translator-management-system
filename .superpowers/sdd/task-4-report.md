@@ -179,3 +179,24 @@ git diff --check
 
 - `npm audit --omit=dev` 仍报告 2 项 moderate，均来自 Next 内嵌的 PostCSS `<8.5.10`。唯一自动修复建议是 `npm audit fix --force`，会降级至 Next 9.3.3 并破坏当前 vinext/Worker 栈，因此遵循审查要求未执行。
 - 本轮仍按明确约束未打开浏览器做视觉 QA；HTTP/静态契约、构建产物和响应式 CSS 检查已通过。
+
+## 复审修复（2026-07-20）
+
+### RED 证据
+
+- 先增加超限费率/字数的安全预计金额、中文提交反馈、客户端/服务端上限一致性、UI `max` 契约和真实日历日期测试。
+- 定向执行结果为 `4 pass / 3 fail`：安全表单派生层不存在，UI 没有服务端同值 `max`，`2026-99-99` 未被拒绝。
+
+### GREEN 实现
+
+- 新增无异常的 `safePoEstimate()`；超限或无效数值显示“超出范围”，不再从 React render 路径抛错。
+- 费率和 PO 提交在发起请求前经过安全准备函数；转换/规范化失败直接写入中文 error feedback，不会产生未处理 Promise。
+- 费率输入 `max=100`、字数输入 `max=100000000`，均由服务端上限常量派生。
+- 入库日期增加 UTC 解析后 ISO 日期 round-trip 比对；闰日 `2024-02-29` 通过，`2025-02-29` 和 `2026-99-99` 被拒绝。
+
+### 复审验证
+
+- 定向测试 `9/9` 通过；全量 TypeScript 单测 `29/29` 通过。
+- TypeScript 和 ESLint 均退出码 `0`。
+- vinext build 成功，构建产物测试 `2/2` 通过；Worker、Sites metadata、D1 迁移和社交图产物均存在且非空。
+- `git diff --check` 通过。`npm audit --omit=dev` 的 2 项 moderate 继续按复审要求保留，未执行破坏性强制降级。
