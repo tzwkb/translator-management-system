@@ -60,6 +60,14 @@ def check_missing_secret_stops_before_migration():
     assert log == ""
 
 
+def check_missing_aes_key_stops_before_migration():
+    with tempfile.TemporaryDirectory(prefix="docker-startup-") as tmpdir:
+        result, log = run_entrypoint(tmpdir, JWT_SECRET="test-jwt", AES_KEY="")
+    assert result.returncode != 0
+    assert "AES_KEY must be set" in result.stderr
+    assert log == ""
+
+
 def check_migration_failure_stops_before_uvicorn():
     with tempfile.TemporaryDirectory(prefix="docker-startup-") as tmpdir:
         result, log = run_entrypoint(
@@ -96,12 +104,15 @@ def check_docker_files_package_required_assets_without_secrets():
     assert "JWT_SECRET=" not in dockerfile
     assert "AES_KEY=" not in dockerfile
     assert "ENTRYPOINT [\"/app/backend/docker-entrypoint.sh\"]" in dockerfile
+    assert "ENV TOKEN_TTL=28800" in dockerfile
     assert "./data:/data" in compose
     assert "sqlite:////data/app.db" in compose
+    assert "TOKEN_TTL:" not in compose
 
 
 def main():
     check_missing_secret_stops_before_migration()
+    check_missing_aes_key_stops_before_migration()
     check_migration_failure_stops_before_uvicorn()
     check_successful_migration_starts_uvicorn_with_persistent_sqlite_default()
     check_docker_files_package_required_assets_without_secrets()

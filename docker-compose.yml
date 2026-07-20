@@ -9,6 +9,5 @@ services:
       - ./data/.env
     environment:
       DB_URL: sqlite:////data/app.db
-      TOKEN_TTL: ${TOKEN_TTL:-28800}
     volumes:
       - ./data:/data
