@@ -94,6 +94,18 @@ def check_successful_migration_starts_uvicorn_with_persistent_sqlite_default():
     assert "uvicorn:app.main:app --host 0.0.0.0 --port 8000" in log
 
 
+def check_platform_port_is_forwarded_to_uvicorn():
+    with tempfile.TemporaryDirectory(prefix="docker-startup-") as tmpdir:
+        result, log = run_entrypoint(
+            tmpdir,
+            JWT_SECRET="test-jwt",
+            AES_KEY="0" * 64,
+            PORT="10000",
+        )
+    assert result.returncode == 0
+    assert "uvicorn:app.main:app --host 0.0.0.0 --port 10000" in log
+
+
 def check_docker_files_package_required_assets_without_secrets():
     dockerfile = DOCKERFILE.read_text()
     compose = COMPOSE_FILE.read_text()
@@ -122,6 +134,7 @@ def main():
     check_missing_aes_key_stops_before_migration()
     check_migration_failure_stops_before_uvicorn()
     check_successful_migration_starts_uvicorn_with_persistent_sqlite_default()
+    check_platform_port_is_forwarded_to_uvicorn()
     check_docker_files_package_required_assets_without_secrets()
     print("docker startup tests pass")
     return 0
