@@ -41,6 +41,22 @@ python3 -m venv .venv
 
 应先执行 `alembic upgrade head`，迁移成功后再启动服务。首次启动库为空时会写入示例数据。加密 key 默认生成到 `backend/.key`，生产环境应改用固定 `AES_KEY` 环境变量。
 
+## Docker 本地启动
+
+Docker 将持久化宿主机目录 `./data` 挂载为容器内的 `/data`。先在本地创建 `data/.env`；该文件已被 Git 和 Docker 构建上下文忽略：
+
+```bash
+mkdir -p data
+JWT_SECRET="$(openssl rand -hex 32)"
+AES_KEY="$(openssl rand -hex 32)"
+printf 'JWT_SECRET=%s\nAES_KEY=%s\nTOKEN_TTL=28800\n' "$JWT_SECRET" "$AES_KEY" > data/.env
+docker compose up --build
+```
+
+浏览器打开：[http://127.0.0.1:8000/](http://127.0.0.1:8000/)。容器会先执行 `alembic upgrade head`，迁移失败即退出，不会启动 Uvicorn。SQLite 默认地址为 `sqlite:////data/app.db`；迁移或备份时请保留整个 `data/` 目录。
+
+`JWT_SECRET`、`AES_KEY` 为必填项（`AES_KEY` 是 64 位十六进制 AES-256 密钥）；`TOKEN_TTL` 可选，默认 `28800` 秒。镜像不内置密钥；不得提交 `data/.env`、数据库或 key 文件。该方案仅用于单实例 Demo，不提供正式认证、备份、监控、HTTPS、PostgreSQL 或多实例协调。
+
 ## 数据库版本管理
 
 数据库结构由 Alembic 迁移统一管理；应用启动不再自动建表或修改表结构。修改 SQLAlchemy 模型后：
@@ -84,6 +100,7 @@ BASE=http://127.0.0.1:8000 backend/.venv/bin/python backend/tests/test_acceptanc
 backend/.venv/bin/python backend/tests/test_acceptance_isolation.py
 PYTHONPATH=backend backend/.venv/bin/python backend/tests/test_pending_idempotency.py
 PYTHONPATH=backend backend/.venv/bin/python backend/tests/test_migrations.py
+PYTHONPATH=backend backend/.venv/bin/python backend/tests/test_docker_startup.py
 PYTHONPATH=backend backend/.venv/bin/python backend/tests/test_schema_validation.py
 for f in frontend/tests/*.mjs; do node "$f" || exit 1; done
 backend/.venv/bin/python -m compileall backend/app backend/tests translator-mgmt-agent

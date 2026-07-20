@@ -40,6 +40,22 @@ Open [http://127.0.0.1:8000/](http://127.0.0.1:8000/).
 
 The local demo database is created automatically when empty. The encryption key file is generated at `backend/.key` unless `AES_KEY` is provided.
 
+## Run with Docker
+
+Docker mounts the persistent host directory `./data` at `/data`. Create `data/.env` locally; it is ignored by Git and the Docker build context:
+
+```bash
+mkdir -p data
+JWT_SECRET="$(openssl rand -hex 32)"
+AES_KEY="$(openssl rand -hex 32)"
+printf 'JWT_SECRET=%s\nAES_KEY=%s\nTOKEN_TTL=28800\n' "$JWT_SECRET" "$AES_KEY" > data/.env
+docker compose up --build
+```
+
+Open [http://127.0.0.1:8000/](http://127.0.0.1:8000/). The container runs `alembic upgrade head` before Uvicorn; migration failure stops the container. SQLite defaults to `sqlite:////data/app.db`, so preserve the whole `data/` directory for migration or backup.
+
+`JWT_SECRET` and `AES_KEY` are required (`AES_KEY` is a 64-character hexadecimal AES-256 key). `TOKEN_TTL` is optional and defaults to `28800` seconds. No secrets are baked into the image: never commit `data/.env`, databases, or key files. This is a single-instance demo; production authentication, backups, monitoring, HTTPS, PostgreSQL, and multi-instance coordination are out of scope.
+
 ## Verification
 
 Backend acceptance tests start an isolated temporary server and SQLite database by default:
@@ -60,6 +76,8 @@ Other local checks:
 ```bash
 backend/.venv/bin/python backend/tests/test_acceptance_isolation.py
 PYTHONPATH=backend backend/.venv/bin/python backend/tests/test_pending_idempotency.py
+PYTHONPATH=backend backend/.venv/bin/python backend/tests/test_migrations.py
+PYTHONPATH=backend backend/.venv/bin/python backend/tests/test_docker_startup.py
 PYTHONPATH=backend backend/.venv/bin/python backend/tests/test_schema_validation.py
 for f in frontend/tests/*.mjs; do node "$f" || exit 1; done
 backend/.venv/bin/python -m compileall backend/app backend/tests translator-mgmt-agent
