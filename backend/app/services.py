@@ -6,7 +6,8 @@ from sqlalchemy import select, update
 from sqlalchemy.exc import IntegrityError
 
 from .models import (PO, AuditLog, Complaint, LanguagePair, PendingChange,
-                     PendingIdempotency, QualityScore, RateChange, Translator)
+                     PendingIdempotency, QualityScore, RateChange, Translator,
+                     TranslatorProjectExperience)
 from .pending_safety import normalize_payload, pending_fingerprint
 
 PO_STATUSES = ["未开票", "已开票待付", "已支付", "有争议"]
@@ -78,6 +79,17 @@ def prepare_rate_change(s, tid, payload):
     return data
 
 
+def prepare_project_experience(s, tid, payload):
+    get_translator(s, tid)
+    data = normalize_payload(dict(payload))
+    source_lang, target_lang = validate_language_pair(
+        data.get("source_lang"), data.get("target_lang"),
+    )
+    data["source_lang"] = source_lang
+    data["target_lang"] = target_lang
+    return data
+
+
 def prepare_po(s, payload, check_duplicate=True):
     data = normalize_payload(dict(payload))
     get_translator(s, data["translator_id"])
@@ -93,6 +105,19 @@ def prepare_po(s, payload, check_duplicate=True):
         language_pair = find_language_pair(s, data["translator_id"], source_lang, target_lang)
         data["rate"] = rate_for_role(language_pair, data.get("role"))
     return normalize_payload(data)
+
+
+def svc_add_project_experience(s, tid, payload, who):
+    data = prepare_project_experience(s, tid, payload)
+    translator = get_translator(s, tid)
+    experience = TranslatorProjectExperience(translator_id=tid, **data)
+    s.add(experience)
+    s.flush()
+    audit(
+        s, who, "新增", "项目经历", experience.id,
+        f"{translator.name} {experience.project_name}",
+    )
+    return experience
 
 
 def prepare_po_status(s, pid, status):

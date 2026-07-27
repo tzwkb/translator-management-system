@@ -7,13 +7,16 @@ import tempfile
 from pathlib import Path
 
 from sqlalchemy import create_engine, inspect, text
+from sqlalchemy.orm import Session
 
-from app.models import Base
+from app.models import Base, Translator
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 BACKEND_DIR = PROJECT_ROOT / "backend"
 ALEMBIC_CONFIG = BACKEND_DIR / "alembic.ini"
+INITIAL_REVISION = "20260717_0001"
+HEAD_REVISION = "20260724_0002"
 EXPECTED_TABLES = {
     "audit_logs",
     "capacity_allocations",
@@ -26,6 +29,7 @@ EXPECTED_TABLES = {
     "po_settlements",
     "quality_scores",
     "rate_changes",
+    "translator_project_experiences",
     "translators",
 }
 
@@ -52,6 +56,59 @@ def assert_ok(result):
     assert result.returncode == 0, result.stdout + result.stderr
 
 
+def assert_profile_schema(engine):
+    inspector = inspect(engine)
+    translator_columns = {
+        item["name"]: item for item in inspector.get_columns("translators")
+    }
+    assert translator_columns["gender"]["nullable"]
+    assert translator_columns["entity_type"]["nullable"]
+
+    experience_columns = {
+        item["name"]: item
+        for item in inspector.get_columns("translator_project_experiences")
+    }
+    assert set(experience_columns) == {
+        "id",
+        "translator_id",
+        "cooperation_source",
+        "project_status",
+        "project_name",
+        "external_company",
+        "role",
+        "source_lang",
+        "target_lang",
+        "start_date",
+        "end_date",
+        "remaining_volume",
+        "deadline",
+        "remarks",
+    }
+    for required in (
+        "translator_id",
+        "cooperation_source",
+        "project_status",
+        "project_name",
+    ):
+        assert not experience_columns[required]["nullable"]
+    foreign_keys = inspector.get_foreign_keys("translator_project_experiences")
+    assert any(
+        key["constrained_columns"] == ["translator_id"]
+        and key["referred_table"] == "translators"
+        and key["referred_columns"] == ["id"]
+        for key in foreign_keys
+    )
+    indexes = {
+        item["name"]
+        for item in inspector.get_indexes("translator_project_experiences")
+    }
+    assert indexes == {
+        "ix_translator_project_experiences_cooperation_source",
+        "ix_translator_project_experiences_project_status",
+        "ix_translator_project_experiences_translator_id",
+    }
+
+
 def check_empty_database_upgrade(tmpdir):
     db_path = Path(tmpdir) / "empty.db"
     result = run("-m", "alembic", "-c", str(ALEMBIC_CONFIG), "upgrade", "head",
@@ -62,6 +119,7 @@ def check_empty_database_upgrade(tmpdir):
     inspector = inspect(engine)
     tables = set(inspector.get_table_names())
     assert EXPECTED_TABLES | {"alembic_version"} == tables
+    assert_profile_schema(engine)
     indexes = {item["name"] for item in inspector.get_indexes("pending_changes")}
     assert "ux_pending_actor_idempotency" in indexes
     assert "ux_pending_active_fingerprint" in indexes
@@ -80,6 +138,110 @@ def check_empty_database_upgrade(tmpdir):
     result = run("-m", "alembic", "-c", str(ALEMBIC_CONFIG), "upgrade", "head",
                  db_path=db_path)
     assert_ok(result)
+
+
+def check_initial_revision_upgrade_round_trip(tmpdir):
+    db_path = Path(tmpdir) / "initial-revision.db"
+    result = run(
+        "-m",
+        "alembic",
+        "-c",
+        str(ALEMBIC_CONFIG),
+        "upgrade",
+        INITIAL_REVISION,
+        db_path=db_path,
+    )
+    assert_ok(result)
+
+    engine = create_engine(f"sqlite:///{db_path}")
+    with engine.begin() as conn:
+        conn.execute(text("""
+            INSERT INTO translators
+                (id, name, status, low_error_count, current_project, role,
+                 cumulative_word_count, cumulative_unpaid, complaint_count,
+                 deduction_total)
+            VALUES
+                (7, '保留数据', 'Active', 0, '旧当前项目', '翻译', 0, 0, 0, 0)
+        """))
+
+    result = run(
+        "-m",
+        "alembic",
+        "-c",
+        str(ALEMBIC_CONFIG),
+        "upgrade",
+        "head",
+        db_path=db_path,
+    )
+    assert_ok(result)
+    assert_profile_schema(engine)
+    with engine.connect() as conn:
+        row = conn.execute(text("""
+            SELECT name, gender, entity_type
+            FROM translators WHERE id = 7
+        """)).one()
+        assert tuple(row) == ("保留数据", None, None)
+        assert conn.scalar(
+            text("SELECT COUNT(*) FROM translator_project_experiences")
+        ) == 0
+        assert conn.scalar(text("PRAGMA integrity_check")) == "ok"
+        assert conn.scalar(text("SELECT version_num FROM alembic_version")) == HEAD_REVISION
+    with Session(engine) as session:
+        translator = session.get(Translator, 7)
+        assert translator is not None
+        assert translator.gender is None
+        assert translator.entity_type is None
+        assert translator.as_dict()["current_project"] == "旧当前项目"
+
+    result = run(
+        "-m",
+        "alembic",
+        "-c",
+        str(ALEMBIC_CONFIG),
+        "check",
+        db_path=db_path,
+    )
+    assert_ok(result)
+    assert "No new upgrade operations detected" in result.stdout
+
+    result = run(
+        "-m",
+        "alembic",
+        "-c",
+        str(ALEMBIC_CONFIG),
+        "downgrade",
+        INITIAL_REVISION,
+        db_path=db_path,
+    )
+    assert_ok(result)
+    inspector = inspect(engine)
+    assert "translator_project_experiences" not in inspector.get_table_names()
+    translator_columns = {
+        item["name"] for item in inspector.get_columns("translators")
+    }
+    assert "gender" not in translator_columns
+    assert "entity_type" not in translator_columns
+    with engine.connect() as conn:
+        assert conn.scalar(
+            text("SELECT current_project FROM translators WHERE id = 7")
+        ) == "旧当前项目"
+        assert conn.scalar(text("PRAGMA integrity_check")) == "ok"
+        assert conn.scalar(text("SELECT version_num FROM alembic_version")) == INITIAL_REVISION
+
+    result = run(
+        "-m",
+        "alembic",
+        "-c",
+        str(ALEMBIC_CONFIG),
+        "upgrade",
+        "head",
+        db_path=db_path,
+    )
+    assert_ok(result)
+    assert_profile_schema(engine)
+    with engine.connect() as conn:
+        assert conn.scalar(text("SELECT name FROM translators WHERE id = 7")) == "保留数据"
+        assert conn.scalar(text("PRAGMA integrity_check")) == "ok"
 
 
 def check_application_import_does_not_create_schema(tmpdir):
@@ -145,6 +307,7 @@ def check_known_legacy_missing_table_is_repaired(tmpdir):
 def main():
     with tempfile.TemporaryDirectory(prefix="alembic-tests-") as tmpdir:
         check_empty_database_upgrade(tmpdir)
+        check_initial_revision_upgrade_round_trip(tmpdir)
         check_application_import_does_not_create_schema(tmpdir)
         check_existing_database_baseline(tmpdir)
         check_baseline_safety_guards(tmpdir)

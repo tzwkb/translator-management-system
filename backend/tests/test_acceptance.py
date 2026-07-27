@@ -247,6 +247,196 @@ def main():
     chk("源目标相同语言对400", code(lambda: req("POST", "/api/translators/1/language-pairs",
         {"source_lang": "ZH", "target_lang": "ZH", "translation_rate": 1}, token=ET)) == 400)
 
+    print("=== C2 项目经历与基础字段 ===")
+    profile_body = {
+        "name": "项目经历校验" + run_tag,
+        "email": f"experience{run_tag}@x.com",
+        "native_language": "中文",
+        "onboarding_date": "2026-07-01",
+        "gender": "male",
+        "entity_type": "individual",
+        "current_project": "旧字段项目",
+        "role": "翻译",
+    }
+    _, profile = req("POST", "/api/translators", profile_body, token=ET)
+    experience_tid = profile["id"]
+    chk("性别和主体类型可新增读取",
+        profile.get("gender") == "male" and profile.get("entity_type") == "individual",
+        profile)
+    updated_profile_body = dict(
+        profile_body, gender="female", entity_type="vendor",
+    )
+    _, updated_profile = req(
+        "PUT", f"/api/translators/{experience_tid}", updated_profile_body, token=ET,
+    )
+    chk("性别和主体类型可编辑读取",
+        updated_profile.get("gender") == "female"
+        and updated_profile.get("entity_type") == "vendor",
+        updated_profile)
+
+    _, current_our = req(
+        "POST", f"/api/translators/{experience_tid}/project-experiences",
+        {
+            "cooperation_source": "our_company",
+            "project_status": "current",
+            "project_name": " 我司当前项目 ",
+            "role": "翻译",
+            "source_lang": "zh",
+            "target_lang": "en",
+            "start_date": "2026-07-01",
+            "remaining_volume": 12000,
+            "deadline": "2026-08-01",
+        },
+        token=ET,
+    )
+    _, current_external = req(
+        "POST", f"/api/translators/{experience_tid}/project-experiences",
+        {
+            "cooperation_source": "external",
+            "project_status": "current",
+            "project_name": "外部当前项目",
+            "external_company": "外部公司",
+            "role": "审校",
+            "start_date": "2026-06-01",
+        },
+        token=ET,
+    )
+    _, past_external = req(
+        "POST", f"/api/translators/{experience_tid}/project-experiences",
+        {
+            "cooperation_source": "external",
+            "project_status": "past",
+            "project_name": "外部过往项目",
+            "role": "LQE",
+            "start_date": "2025-01-01",
+            "end_date": "2025-12-01",
+        },
+        token=ET,
+    )
+    _, experiences = req(
+        "GET", f"/api/translators/{experience_tid}/project-experiences",
+    )
+    chk("一个译员可新增多条项目经历且返回稳定ID",
+        len(experiences) == 3
+        and all(isinstance(item.get("id"), int) for item in experiences),
+        experiences)
+    chk("项目经历按当前优先和开始日期倒序",
+        [item["project_name"] for item in experiences]
+        == ["我司当前项目", "外部当前项目", "外部过往项目"],
+        experiences)
+    chk("项目经历语言码复用现有校验并规范化",
+        current_our.get("source_lang") == "ZH"
+        and current_our.get("target_lang") == "EN",
+        current_our)
+    chk("同一译员支持两个当前项目和独立角色",
+        current_our.get("role") == "翻译"
+        and current_external.get("role") == "审校"
+        and past_external.get("project_status") == "past",
+        experiences)
+    profile_after_experiences = next(
+        item for item in req("GET", "/api/translators")[1]
+        if item["id"] == experience_tid
+    )
+    chk("项目经历读写不改变旧当前项目和角色",
+        profile_after_experiences.get("current_project") == "旧字段项目"
+        and profile_after_experiences.get("role") == "翻译",
+        profile_after_experiences)
+    chk("不存在译员的项目经历GET返回404",
+        code(lambda: req("GET", "/api/translators/99999/project-experiences")) == 404)
+    chk("不存在译员的项目经历POST返回404",
+        code(lambda: req(
+            "POST", "/api/translators/99999/project-experiences",
+            {
+                "cooperation_source": "our_company",
+                "project_status": "current",
+                "project_name": "不存在",
+            },
+            token=ET,
+        )) == 404)
+    chk("只读角色不能新增项目经历",
+        code(lambda: req(
+            "POST", f"/api/translators/{experience_tid}/project-experiences",
+            {
+                "cooperation_source": "our_company",
+                "project_status": "current",
+                "project_name": "只读写入",
+            },
+            token=BT,
+        )) == 403)
+    chk("agent不能新增项目经历",
+        code(lambda: req(
+            "POST", f"/api/translators/{experience_tid}/project-experiences",
+            {
+                "cooperation_source": "our_company",
+                "project_status": "current",
+                "project_name": "Agent写入",
+            },
+            token=AT,
+        )) == 403)
+    chk("非法项目状态返回422",
+        code(lambda: req(
+            "POST", f"/api/translators/{experience_tid}/project-experiences",
+            {
+                "cooperation_source": "our_company",
+                "project_status": "active",
+                "project_name": "非法状态",
+            },
+            token=ET,
+        )) == 422)
+    chk("非法合作来源返回422",
+        code(lambda: req(
+            "POST", f"/api/translators/{experience_tid}/project-experiences",
+            {
+                "cooperation_source": "partner",
+                "project_status": "current",
+                "project_name": "非法来源",
+            },
+            token=ET,
+        )) == 422)
+    chk("负数剩余量返回422",
+        code(lambda: req(
+            "POST", f"/api/translators/{experience_tid}/project-experiences",
+            {
+                "cooperation_source": "our_company",
+                "project_status": "current",
+                "project_name": "负数剩余量",
+                "remaining_volume": -1,
+            },
+            token=ET,
+        )) == 422)
+    chk("语言只填一侧返回422",
+        code(lambda: req(
+            "POST", f"/api/translators/{experience_tid}/project-experiences",
+            {
+                "cooperation_source": "our_company",
+                "project_status": "current",
+                "project_name": "缺目标语言",
+                "source_lang": "ZH",
+            },
+            token=ET,
+        )) == 422)
+    chk("非法项目经历语言码返回400",
+        code(lambda: req(
+            "POST", f"/api/translators/{experience_tid}/project-experiences",
+            {
+                "cooperation_source": "our_company",
+                "project_status": "current",
+                "project_name": "非法语言码",
+                "source_lang": "XX",
+                "target_lang": "EN",
+            },
+            token=ET,
+        )) == 400)
+    _, audit_rows = req("GET", "/api/audit", token=ET)
+    chk("新增项目经历写入审计日志",
+        any(
+            item.get("entity") == "项目经历"
+            and item.get("entity_id") == current_our.get("id")
+            and "我司当前项目" in (item.get("detail") or "")
+            for item in audit_rows
+        ),
+        audit_rows[:5])
+
     print("=== D 安全（加密脱敏）===")
     _, pm = req("GET", "/api/translators/1/payment")
     chk("银行账号脱敏", pm["bank_account"].startswith("*") and pm["bank_account"].endswith("5678"))

@@ -3,7 +3,8 @@
 from pydantic import ValidationError
 
 from app.schemas import (CapacityIn, ComplaintIn, ContractIn, LanguagePairIn,
-                         POIn, QualityIn, RateChangeIn, TranslatorIn)
+                         POIn, ProjectExperienceIn, QualityIn, RateChangeIn,
+                         TranslatorIn)
 
 
 def rejects(model, **data):
@@ -19,6 +20,14 @@ def main():
         ("译员入库日期必须是真实日期", rejects(TranslatorIn, name="X", native_language="中文", onboarding_date="2025-01-32")),
         ("译员邮箱格式非法应拒绝", rejects(TranslatorIn, name="X", native_language="中文", onboarding_date="2025-01-01", email="bad-email")),
         ("译员准时率不能超过100", rejects(TranslatorIn, name="X", native_language="中文", onboarding_date="2025-01-01", punctuality_rate=101)),
+        ("译员性别必须使用固定枚举", rejects(TranslatorIn, name="X", native_language="中文", onboarding_date="2025-01-01", gender="unknown")),
+        ("译员主体类型必须使用固定枚举", rejects(TranslatorIn, name="X", native_language="中文", onboarding_date="2025-01-01", entity_type="company")),
+        ("项目经历项目名不能为空", rejects(ProjectExperienceIn, cooperation_source="our_company", project_status="current", project_name="  ")),
+        ("项目经历合作来源必须使用固定枚举", rejects(ProjectExperienceIn, cooperation_source="partner", project_status="current", project_name="X")),
+        ("项目经历状态必须使用固定枚举", rejects(ProjectExperienceIn, cooperation_source="our_company", project_status="active", project_name="X")),
+        ("项目经历剩余量不能为负", rejects(ProjectExperienceIn, cooperation_source="our_company", project_status="current", project_name="X", remaining_volume=-1)),
+        ("项目经历语言对必须同时填写", rejects(ProjectExperienceIn, cooperation_source="our_company", project_status="current", project_name="X", source_lang="ZH")),
+        ("项目经历日期必须是真实日期", rejects(ProjectExperienceIn, cooperation_source="external", project_status="past", project_name="X", start_date="2026-02-30")),
         ("报价变更日期必须是真实日期", rejects(RateChangeIn, change_date="2026-13-01")),
         ("报价变更新费率不能为负", rejects(RateChangeIn, change_date="2026-06-01", new_rate=-1)),
         ("PO结算月必须是真实月份", rejects(POIn, translator_id=1, settlement_month="2026-13")),

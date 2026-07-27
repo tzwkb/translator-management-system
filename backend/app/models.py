@@ -1,4 +1,4 @@
-"""SQLAlchemy 数据模型（11 张表）。"""
+"""SQLAlchemy 数据模型。"""
 from datetime import datetime
 from typing import Optional
 
@@ -28,6 +28,8 @@ class Translator(Base):
     onboarding_date: Mapped[Optional[str]] = mapped_column(String(20))
     status: Mapped[str] = mapped_column(String(20), default="Active", index=True)
     source: Mapped[Optional[str]] = mapped_column(String(100))
+    gender: Mapped[Optional[str]] = mapped_column(String(20))
+    entity_type: Mapped[Optional[str]] = mapped_column(String(20))
     # 专业能力
     language_pairs: Mapped[Optional[str]] = mapped_column(String(200))
     translation_rate: Mapped[Optional[float]] = mapped_column(Numeric(10, 2))
@@ -80,7 +82,8 @@ class Translator(Base):
 
     # 人录入字段（新增/编辑表单可填）
     EDITABLE = ("name", "wechat", "email", "location", "timezone", "native_language",
-                "onboarding_date", "status", "source", "translation_rate",
+                "onboarding_date", "status", "source", "gender", "entity_type",
+                "translation_rate",
                 "mtpe_rate", "review_rate", "lqa_rate", "rate_confirmed_date", "domains",
                 "text_types", "cat_tools", "internal_rating", "trial_result", "current_project",
                 "role", "daily_output", "weekend_off", "availability", "currency",
@@ -99,6 +102,7 @@ class Translator(Base):
             "location": self.location, "timezone": self.timezone,
             "native_language": self.native_language, "onboarding_date": self.onboarding_date,
             "status": self.status, "source": self.source,
+            "gender": self.gender, "entity_type": self.entity_type,
             "language_pairs": getattr(self, "_cached_lp", None) or self.language_pairs or "", "translation_rate": _f(self.translation_rate),
             "mtpe_rate": _f(self.mtpe_rate), "review_rate": _f(self.review_rate),
             "lqa_rate": _f(self.lqa_rate), "rate_confirmed_date": self.rate_confirmed_date,
@@ -122,6 +126,42 @@ class Translator(Base):
             "punctuality_rate": _f(self.punctuality_rate), "responsiveness": self.responsiveness,
             "complaint_count": self.complaint_count, "deduction_total": _f(self.deduction_total),
             "cooperation_rating": self.cooperation_rating, "last_contact": self.last_contact,
+            "remarks": self.remarks,
+        }
+
+
+class TranslatorProjectExperience(Base):
+    __tablename__ = "translator_project_experiences"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    translator_id: Mapped[int] = mapped_column(ForeignKey("translators.id"), index=True)
+    cooperation_source: Mapped[str] = mapped_column(String(20), index=True)
+    project_status: Mapped[str] = mapped_column(String(20), index=True)
+    project_name: Mapped[str] = mapped_column(String(200))
+    external_company: Mapped[Optional[str]] = mapped_column(String(200))
+    role: Mapped[Optional[str]] = mapped_column(String(50))
+    source_lang: Mapped[Optional[str]] = mapped_column(String(20))
+    target_lang: Mapped[Optional[str]] = mapped_column(String(20))
+    start_date: Mapped[Optional[str]] = mapped_column(String(20))
+    end_date: Mapped[Optional[str]] = mapped_column(String(20))
+    remaining_volume: Mapped[Optional[float]] = mapped_column(Numeric(14, 2))
+    deadline: Mapped[Optional[str]] = mapped_column(String(20))
+    remarks: Mapped[Optional[str]] = mapped_column(Text)
+
+    def as_dict(self):
+        return {
+            "id": self.id,
+            "translator_id": self.translator_id,
+            "cooperation_source": self.cooperation_source,
+            "project_status": self.project_status,
+            "project_name": self.project_name,
+            "external_company": self.external_company,
+            "role": self.role,
+            "source_lang": self.source_lang,
+            "target_lang": self.target_lang,
+            "start_date": self.start_date,
+            "end_date": self.end_date,
+            "remaining_volume": _f(self.remaining_volume),
+            "deadline": self.deadline,
             "remarks": self.remarks,
         }
 

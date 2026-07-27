@@ -3,7 +3,7 @@ import re
 from datetime import date
 from typing import Any, Literal, Optional
 
-from pydantic import BaseModel, field_validator
+from pydantic import BaseModel, field_validator, model_validator
 
 DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 MONTH_RE = re.compile(r"^\d{4}-\d{2}$")
@@ -77,6 +77,8 @@ class TranslatorIn(BaseModel):
     timezone: Optional[str] = None
     status: Literal["Active", "Dormant", "Blacklisted", "Probation"] = "Active"
     source: Optional[str] = None
+    gender: Optional[Literal["male", "female", "undisclosed"]] = None
+    entity_type: Optional[Literal["individual", "vendor"]] = None
     language_pairs: Optional[str] = None
     translation_rate: Optional[float] = None
     mtpe_rate: Optional[float] = None
@@ -133,6 +135,52 @@ class TranslatorIn(BaseModel):
     @classmethod
     def valid_punctuality(cls, v):
         return _percent(v)
+
+
+class ProjectExperienceIn(BaseModel):
+    cooperation_source: Literal["our_company", "external"]
+    project_status: Literal["current", "past"]
+    project_name: str
+    external_company: Optional[str] = None
+    role: Optional[TaskType] = None
+    source_lang: Optional[str] = None
+    target_lang: Optional[str] = None
+    start_date: Optional[str] = None
+    end_date: Optional[str] = None
+    remaining_volume: Optional[float] = None
+    deadline: Optional[str] = None
+    remarks: Optional[str] = None
+
+    @field_validator("project_name", mode="before")
+    @classmethod
+    def valid_project_name(cls, v):
+        v = _blank(v)
+        if v is None:
+            raise ValueError("项目名称必填")
+        return v
+
+    @field_validator(
+        "external_company", "source_lang", "target_lang", "remarks", mode="before"
+    )
+    @classmethod
+    def normalize_optional_text(cls, v):
+        return _blank(v)
+
+    @field_validator("start_date", "end_date", "deadline", mode="before")
+    @classmethod
+    def valid_dates(cls, v):
+        return _date(v)
+
+    @field_validator("remaining_volume")
+    @classmethod
+    def valid_remaining_volume(cls, v):
+        return _non_negative(v)
+
+    @model_validator(mode="after")
+    def valid_language_pair(self):
+        if bool(self.source_lang) != bool(self.target_lang):
+            raise ValueError("语言对需同时选择源语言和目标语言")
+        return self
 
 
 class RateChangeIn(BaseModel):

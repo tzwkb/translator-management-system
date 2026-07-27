@@ -2,21 +2,22 @@
 from datetime import datetime
 
 from fastapi import APIRouter, Depends, Header, HTTPException
-from sqlalchemy import select
+from sqlalchemy import case, select
 from sqlalchemy.orm import Session
 
 from ..db import engine
 from ..models import (Capacity, Complaint, Contract, LanguagePair, PaymentInfo,
                       QualityScore,
-                      RateChange, Translator)
+                      RateChange, Translator, TranslatorProjectExperience)
 from ..schemas import (CapacityIn, ComplaintIn, ContractIn, LanguagePairIn,
-                       PaymentIn, QualityIn, RateChangeIn, TranslatorIn)
+                       PaymentIn, ProjectExperienceIn, QualityIn, RateChangeIn,
+                       TranslatorIn)
 from ..security import enc, require_editor, require_writer
 from ..services import (audit, find_language_pair, get_translator,
                         find_idempotent_request, language_pair_options,
                         make_pending, pending_request_hash, prepare_rate_change,
                         resync_translator, svc_add_rate_change,
-                        validate_language_pair)
+                        svc_add_project_experience, validate_language_pair)
 
 router = APIRouter(prefix="/api")
 
@@ -88,6 +89,41 @@ def child_or_404(s: Session, model, tid: int, cid: int, label: str):
     if not row or row.translator_id != tid:
         raise HTTPException(404, f"{label}不存在")
     return row
+
+
+# ---------------- 项目经历 ----------------
+@router.get("/translators/{tid}/project-experiences")
+def list_project_experiences(tid: int):
+    with Session(engine) as s:
+        get_translator(s, tid)
+        current_first = case(
+            (TranslatorProjectExperience.project_status == "current", 0),
+            else_=1,
+        )
+        rows = s.scalars(
+            select(TranslatorProjectExperience)
+            .where(TranslatorProjectExperience.translator_id == tid)
+            .order_by(
+                current_first,
+                TranslatorProjectExperience.start_date.is_(None),
+                TranslatorProjectExperience.start_date.desc(),
+                TranslatorProjectExperience.id.desc(),
+            )
+        ).all()
+        return [row.as_dict() for row in rows]
+
+
+@router.post("/translators/{tid}/project-experiences")
+def add_project_experience(
+    tid: int,
+    body: ProjectExperienceIn,
+    who: str = Depends(require_editor),
+):
+    with Session(engine) as s:
+        experience = svc_add_project_experience(s, tid, body.model_dump(), who)
+        s.commit()
+        s.refresh(experience)
+        return experience.as_dict()
 
 
 # ---------------- 报价变更 ----------------

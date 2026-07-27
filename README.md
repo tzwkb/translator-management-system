@@ -17,7 +17,8 @@ Translator lifecycle, capability, rate, settlement, and risk management system f
 
 ## Current Capabilities
 
-- Translator master records with grouped detail UI.
+- Translator master records with grouped detail UI, gender, and individual/vendor type.
+- Multiple current or past project experiences per translator, with internal/external cooperation source.
 - Per-language-pair rates with fixed language-code options and free source/target combination.
 - Rate-change records, quality scores, contracts, payment info, complaints, and capacity records.
 - PO settlement with actual-character count, per-1k-character rate, status flow, summary, and pending-review guardrails.
@@ -85,7 +86,7 @@ python3 translator-mgmt-agent/test_client_payloads.py
 git diff --check
 ```
 
-Current acceptance baseline: `71/71`.
+Current acceptance baseline: `88/88`.
 
 ## Remaining Work
 
