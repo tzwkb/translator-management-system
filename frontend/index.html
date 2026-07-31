@@ -150,19 +150,14 @@
   .toast.info { background: var(--ink, #2c3e50); }
   .grouphd { grid-column:1/-1; width:100%; font-weight:600; color:var(--green-d,#2e7d32); margin:10px 0 2px; border-top:1px solid var(--line,#eee); padding-top:8px; font-size:13px; }
   .kv-sec { grid-column:1/-1; flex-basis:100%; width:100%; font-size:12px; color:var(--muted,#888); margin-top:8px; border-top:1px dashed var(--line,#ddd); padding-top:6px; }
-  .filter-panel { background:#fff; border:1px solid var(--line); border-radius:9px; padding:10px 12px; margin-bottom:14px; }
-  .filter-panel summary { cursor:pointer; font-weight:600; color:var(--green-d); }
-  .filter-grid { display:grid; grid-template-columns:repeat(6,minmax(110px,1fr)); gap:9px; margin-top:11px; }
-  .filter-grid .field input,.filter-grid .field select { width:100%; }
-  .filter-actions { display:flex; gap:8px; align-items:end; }
   .excel-hint { display:inline-flex; align-items:center; gap:6px; color:var(--muted); font-size:12px; }
   .excel-hint::before { content:""; width:8px; height:8px; border-radius:2px; background:#217346; box-shadow:3px 3px 0 #a9d5b7; }
-  .data-grid th[data-excel-field] { padding:0; }
+  .data-grid th[data-excel-field],.data-grid th[data-excel-more-grid] { padding:0; }
   .excel-th { min-height:38px; display:flex; align-items:stretch; }
   .excel-th-label { display:flex; align-items:center; flex:1; min-width:0; padding:9px 7px 9px 12px; }
-  .excel-filter-trigger { flex:0 0 27px; width:27px; min-height:38px; padding:0; border-left:1px solid rgba(62,110,150,.12); border-radius:0; background:transparent; color:#63707a; font-size:12px; line-height:1; }
-  .excel-filter-trigger:hover,.excel-filter-trigger:focus-visible { background:#fff; color:#217346; outline:none; }
-  .excel-filter-trigger.active { background:#e5f2e9; color:#217346; box-shadow:inset 0 -3px #217346; font-weight:800; }
+  .excel-filter-trigger,.excel-more-trigger { flex:0 0 27px; width:27px; min-height:38px; padding:0; border-left:1px solid rgba(62,110,150,.12); border-radius:0; background:transparent; color:#63707a; font-size:12px; line-height:1; }
+  .excel-filter-trigger:hover,.excel-filter-trigger:focus-visible,.excel-more-trigger:hover,.excel-more-trigger:focus-visible { background:#fff; color:#217346; outline:none; }
+  .excel-filter-trigger.active,.excel-more-trigger.active { background:#e5f2e9; color:#217346; box-shadow:inset 0 -3px #217346; font-weight:800; }
   .excel-filter-trigger.sorted { color:#217346; }
   .excel-filter-bar { min-height:34px; display:flex; align-items:center; gap:7px; flex-wrap:wrap; margin:-4px 0 9px; padding:6px 8px; border:1px solid #bad8c3; border-left:4px solid #217346; border-radius:6px; background:#f4faf6; }
   .excel-filter-bar[hidden] { display:none; }
@@ -193,6 +188,24 @@
   .excel-value-option span { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
   .excel-value-option small { color:#879189; font-variant-numeric:tabular-nums; }
   .excel-option-empty { padding:18px 10px; color:var(--muted); text-align:center; font-size:12px; }
+  .excel-condition { margin:9px 10px 0; padding:9px; border:1px solid #dce5df; border-radius:4px; background:#f8fbf9; }
+  .excel-condition-title { display:flex; align-items:center; justify-content:space-between; gap:8px; margin-bottom:7px; color:#35443a; font-size:12px; font-weight:700; }
+  .excel-condition-grid { display:grid; grid-template-columns:110px minmax(0,1fr); gap:7px; }
+  .excel-condition-grid select,.excel-condition-grid input,.excel-more-search,.excel-more-field { width:100%; padding:7px 8px; border:1px solid #b9c9be; border-radius:4px; background:#fff; font:inherit; font-size:12px; }
+  .excel-condition-grid input:focus,.excel-condition-grid select:focus,.excel-more-search:focus,.excel-more-field:focus { border-color:#217346; box-shadow:0 0 0 2px rgba(33,115,70,.14); outline:none; }
+  .excel-condition-value-pair { display:grid; grid-template-columns:1fr 1fr; gap:6px; }
+  .excel-condition-help { grid-column:1/-1; color:var(--muted); font-size:11px; line-height:1.4; }
+  .excel-more-menu { width:min(390px,calc(100vw - 24px)); }
+  .excel-more-body { padding:2px 10px 0; }
+  .excel-more-search { margin-bottom:7px; }
+  .excel-more-field { margin-bottom:8px; }
+  .excel-more-condition-list { max-height:158px; overflow:auto; margin:9px 10px 0; border:1px solid #dce5df; border-radius:4px; }
+  .excel-more-condition { display:grid; grid-template-columns:minmax(0,1fr) 24px; align-items:center; gap:5px; min-height:34px; padding:5px 7px 5px 9px; border-bottom:1px solid #edf2ee; font-size:12px; }
+  .excel-more-condition:last-child { border-bottom:none; }
+  .excel-more-condition button { width:22px; height:22px; padding:0; background:transparent; color:#68766d; font-size:16px; }
+  .excel-more-condition button:hover { color:var(--danger); }
+  .excel-more-add { width:100%; margin-top:8px; padding:7px 9px; border:1px solid #83b491; border-radius:4px; background:#eaf5ed; color:#217346; font-size:12px; font-weight:700; }
+  .excel-more-add:hover { background:#dcefe2; }
   .excel-filter-menu-actions { display:flex; justify-content:flex-end; gap:7px; margin-top:9px; padding:9px 10px 10px; border-top:1px solid #dfe8e2; background:#f8fbf9; }
   .excel-menu-clear { margin-right:auto; padding:6px 8px; background:transparent; color:#217346; font-size:12px; }
   .excel-menu-cancel,.excel-menu-apply { padding:6px 12px; border-radius:4px; font-size:12px; }
@@ -213,7 +226,6 @@
     .rate-line { grid-template-columns:1fr; gap:5px; }
     .project-form { grid-template-columns:1fr 1fr; }
     .project-form .span-2,.project-form .full { grid-column:1/-1; }
-    .filter-grid { grid-template-columns:repeat(2,minmax(0,1fr)); }
     .excel-filter-menu { max-height:calc(100vh - 24px); overflow:auto; }
   }
   @media (max-width:520px) {
@@ -250,7 +262,7 @@
     <div class="cards" id="cards"></div>
     <div class="toolbar">
       <input class="search" id="search" placeholder="搜索姓名 / 语言对 / 项目">
-      <span class="excel-hint">点击表头箭头筛选与排序</span>
+      <span class="excel-hint">表头筛选 · 更多字段可筛选未展示信息</span>
       <span class="count" id="count"></span>
       <button class="btn-ghost" onclick="exportTr()">导出 Excel</button>
       <button class="btn-ghost" onclick="exportFiltered()">导出筛选结果</button>
@@ -258,31 +270,6 @@
       <label class="btn-ghost edit-only" style="display:inline-block">导入 LQE 报告<input type="file" accept=".xlsx" style="display:none" onchange="importLQE(this)"></label>
       <button class="btn-primary edit-only" onclick="openEdit()">+ 新增译员</button>
     </div>
-    <details class="filter-panel">
-      <summary>精确组合筛选（全部条件同时满足）</summary>
-      <div class="filter-grid">
-        <div class="field"><label>源语言</label><input id="fs-source" placeholder="ZH"></div>
-        <div class="field"><label>目标语言</label><input id="fs-target" placeholder="EN"></div>
-        <div class="field"><label>母语</label><input id="fs-native" placeholder="English"></div>
-        <div class="field"><label>价格类型</label><select id="fs-rate"><option value="">—</option><option value="translation">翻译</option><option value="mtpe">MTPE</option><option value="review">审校</option><option value="lqa">LQA</option><option value="lqe">LQE</option><option value="fixed">一口价</option><option value="custom">其他</option></select></div>
-        <div class="field"><label>最低价格</label><input id="fs-min" type="number" min="0"></div>
-        <div class="field"><label>最高价格</label><input id="fs-max" type="number" min="0"></div>
-        <div class="field"><label>币种</label><select id="fs-currency"><option value="">—</option><option>CNY</option><option>USD</option><option>EUR</option></select></div>
-        <div class="field"><label>领域标签</label><input id="fs-domain" placeholder="RPG"></div>
-        <div class="field"><label>微信</label><select id="fs-wechat"><option value="">不限</option><option value="true">有微信</option><option value="false">无微信</option></select></div>
-        <div class="field"><label>评级</label><select id="fs-rating"><option value="">不限</option><option>S</option><option>A</option><option>A-</option><option>B</option><option>C</option><option>D</option></select></div>
-        <div class="field"><label>性别</label><select id="fs-gender"><option value="">不限</option><option value="male">男</option><option value="female">女</option></select></div>
-        <div class="field"><label>主体</label><select id="fs-entity"><option value="">不限</option><option value="individual">个人译员</option><option value="vendor">供应商</option></select></div>
-        <div class="field"><label>计算档期</label><select id="fs-availability"><option value="">不限</option><option>空闲</option><option>健康</option><option>饱和</option><option>警告</option></select></div>
-        <div class="field full"><label>任意业务字段</label><div class="addrow">
-          <select id="fs-any-field" style="min-width:180px"></select>
-          <select id="fs-any-op"><option value="contains">包含</option><option value="eq">等于</option><option value="in">属于列表</option><option value="gte">大于等于</option><option value="lte">小于等于</option><option value="between">区间</option><option value="empty">为空</option><option value="not_empty">非空</option></select>
-          <input id="fs-any-value" placeholder="区间填写：最小值,最大值" style="min-width:180px">
-          <button class="btn-ghost" type="button" onclick="addGenericFilter()">添加条件</button>
-        </div><div id="fs-any-list" class="muted" style="margin-top:6px">尚未添加字段条件</div></div>
-        <div class="filter-actions"><button class="btn-primary" onclick="applyPreciseFilters()">筛选</button><button class="btn-ghost" onclick="resetPreciseFilters()">清空</button></div>
-      </div>
-    </details>
     <div id="trExcelBar" class="excel-filter-bar" hidden></div>
     <div class="table-scroll"><table id="translatorTable" class="data-grid"><thead><tr>
       <th data-excel-grid="tr" data-excel-field="name">姓名</th>
@@ -295,6 +282,7 @@
       <th data-excel-grid="tr" data-excel-field="availability">档期</th>
       <th data-excel-grid="tr" data-excel-field="contract_expiry">合同到期</th>
       <th data-excel-grid="tr" data-excel-field="last_contact">最近联系</th>
+      <th data-excel-more-grid="tr">更多字段</th>
       <th>操作</th>
     </tr></thead><tbody id="rows"></tbody></table></div>
     <div class="empty" id="empty" style="display:none">没有匹配的译员</div>
@@ -303,7 +291,7 @@
   <section id="view-po" style="display:none">
     <div class="cards" id="poCards"></div>
     <div class="toolbar">
-      <span class="excel-hint">点击表头箭头多选、搜索或排序</span>
+      <span class="excel-hint">表头筛选 · 更多字段可筛选未展示信息</span>
       <span class="count" id="poCount"></span>
       <span class="count" id="poImportResult"></span>
       <label class="btn-ghost edit-only" style="display:inline-block">导入标准 PO Excel<input id="poImportFile" type="file" accept=".xlsx" style="display:none" onchange="importPOFile(this)"></label>
@@ -315,25 +303,6 @@
       <label class="btn-ghost edit-only" style="display:inline-block" title="仅核对译员映射和结算PO状态；数量规则未确认，不会写入">只读预览 Projectlist<input id="projectlistPreviewFile" type="file" accept=".xlsx" style="display:none" onchange="previewProjectlistFile(this)"></label>
       <button class="btn-primary edit-only" onclick="openPO()">+ 新增 PO</button>
     </div>
-    <details class="filter-panel">
-      <summary>PO 组合筛选（全部条件同时满足）</summary>
-      <div class="filter-grid">
-        <div class="field"><label>结算月份</label><select id="poMonth"></select></div>
-        <div class="field"><label>译员</label><input id="poTranslator" placeholder="姓名关键字"></div>
-        <div class="field"><label>项目</label><input id="poProject" placeholder="项目关键字"></div>
-        <div class="field"><label>状态</label><select id="poStatus"><option value="">全部状态</option><option>未开票</option><option>已开票待付</option><option>已支付</option><option>有争议</option></select></div>
-        <div class="field"><label>工作类型</label><input id="poRole" placeholder="翻译 / LQA / 一口价"></div>
-        <div class="field"><label>源语言</label><input id="poSourceLang" placeholder="ZH"></div>
-        <div class="field"><label>目标语言</label><input id="poTargetLang" placeholder="EN"></div>
-        <div class="field"><label>币种</label><select id="poCurrency"><option value="">全部币种</option><option>CNY</option><option>USD</option><option>EUR</option></select></div>
-        <div class="field"><label>计价模式</label><select id="poPricingMode"><option value="">全部</option><option value="per_1000">按千字</option><option value="per_hour">按小时</option><option value="fixed">一口价</option><option value="manual">手工</option></select></div>
-        <div class="field"><label>结算策略</label><select id="poSettlementMode"><option value="">全部</option><option value="monthly">月结</option><option value="cumulative">累计结</option></select></div>
-        <div class="field"><label>最低金额</label><input id="poMinAmount" type="number" min="0"></div>
-        <div class="field"><label>最高金额</label><input id="poMaxAmount" type="number" min="0"></div>
-        <div class="field"><label>PO 编号</label><input id="poNumber" placeholder="PO 编号关键字"></div>
-        <div class="filter-actions"><button class="btn-primary" onclick="applyPOFilters()">筛选</button><button class="btn-ghost" onclick="resetPOFilters()">清空</button></div>
-      </div>
-    </details>
     <div id="poExcelBar" class="excel-filter-bar" hidden></div>
     <div class="table-scroll"><table id="poTable" class="data-grid"><thead><tr>
       <th data-excel-grid="po" data-excel-field="translator_name">译员</th>
@@ -348,6 +317,8 @@
       <th data-excel-grid="po" data-excel-field="currency">币种</th>
       <th data-excel-grid="po" data-excel-field="status">状态</th>
       <th data-excel-grid="po" data-excel-field="po_number">PO 号</th>
+      <th data-excel-grid="po" data-excel-field="settlement_mode">结算方式</th>
+      <th data-excel-more-grid="po">更多字段</th>
       <th>操作</th>
     </tr></thead><tbody id="poRows"></tbody></table></div>
     <div class="empty" id="poEmpty" style="display:none">没有匹配的结算记录</div>
@@ -380,10 +351,43 @@
     <label class="excel-select-all"><input id="excelSelectAll" type="checkbox" onchange="toggleExcelSelectAll(this.checked)"><span id="excelSelectAllLabel">全选</span></label>
   </div>
   <div id="excelOptionList" class="excel-option-list"></div>
+  <div class="excel-condition">
+    <div class="excel-condition-title"><span>条件筛选</span><span id="excelConditionKind"></span></div>
+    <div class="excel-condition-grid">
+      <select id="excelConditionOp" onchange="renderExcelConditionInputs()"></select>
+      <div id="excelConditionInputs"></div>
+      <div id="excelConditionHelp" class="excel-condition-help">条件与上方勾选值同时满足。</div>
+    </div>
+  </div>
   <div class="excel-filter-menu-actions">
     <button class="excel-menu-clear" type="button" onclick="clearExcelCurrentField()">清除此列</button>
     <button class="excel-menu-cancel" type="button" onclick="closeExcelFilter()">取消</button>
     <button id="excelApply" class="excel-menu-apply" type="button" onclick="applyExcelCurrentField()">确定</button>
+  </div>
+</div>
+
+<div id="excelMoreMenu" class="excel-filter-menu excel-more-menu" role="dialog" aria-modal="false" aria-label="更多字段筛选" hidden>
+  <div class="excel-filter-menu-head">
+    <strong>更多字段筛选</strong>
+    <span id="excelMoreMeta">0/20</span>
+  </div>
+  <div class="excel-more-body">
+    <input id="excelMoreSearch" class="excel-more-search" placeholder="搜索字段" autocomplete="off" oninput="renderExcelMoreFields()">
+    <select id="excelMoreField" class="excel-more-field" onchange="renderExcelMoreEditor()"></select>
+    <div class="excel-condition">
+      <div class="excel-condition-title"><span id="excelMoreFieldLabel">选择字段</span><span id="excelMoreKind"></span></div>
+      <div class="excel-condition-grid">
+        <select id="excelMoreOp" onchange="renderExcelMoreInputs()"></select>
+        <div id="excelMoreInputs"></div>
+        <div class="excel-condition-help">多个字段条件按“并且”组合。</div>
+      </div>
+      <button class="excel-more-add" type="button" onclick="addExcelMoreFilter()">+ 添加条件</button>
+    </div>
+  </div>
+  <div id="excelMoreConditionList" class="excel-more-condition-list"></div>
+  <div class="excel-filter-menu-actions">
+    <button class="excel-menu-clear" type="button" onclick="clearExcelMoreFilters()">清空更多字段</button>
+    <button class="excel-menu-cancel" type="button" onclick="closeExcelMore()">关闭</button>
   </div>
 </div>
 
@@ -483,11 +487,13 @@ const TRF = ["name","native_language","onboarding_date","email","wechat","locati
   "current_project","role","daily_output","weekend_off","availability",
   "currency","payment_method","settlement_mode","invoice_type","tax_deduction","contract_status","contract_expiry","nda_signed",
   "punctuality_rate","responsiveness","cooperation_rating","last_contact","remarks"];
-let DATA=[], PO_ROWS=[], PO_ALL_ROWS=[], PO_SERVER_SUMMARY=null, PAIR_OPTIONS=[], LANG_OPTIONS=[], FILTER_FIELDS=[], GENERIC_FILTERS=[], CUR=null, TOKEN="", ROLE="editor", FILTER_QUERY="", PO_IMPORT_FILE=null;
+let DATA=[], PO_ROWS=[], PO_ALL_ROWS=[], PO_TRANSLATORS=[], PAIR_OPTIONS=[], LANG_OPTIONS=[], FILTER_FIELDS=[], CUR=null, TOKEN="", ROLE="editor", FILTER_QUERY="", PO_IMPORT_FILE=null, PO_FILTER_INITIALIZED=false;
 const EXCEL_BLANK="__EXCEL_BLANK__";
 const EXCEL_FILTERS={tr:{},po:{}};
 const EXCEL_SORT={tr:null,po:null};
-let EXCEL_MENU_STATE={grid:null,field:null,allKeys:[],counts:new Map(),selected:new Set()};
+const MORE_FILTERS={tr:[],po:[]};
+let EXCEL_MENU_STATE={grid:null,field:null,kind:null,allKeys:[],counts:new Map(),selected:new Set()};
+let EXCEL_MORE_STATE={grid:null,kind:null};
 const EXCEL_COLUMNS={
   tr:{
     name:{label:"姓名",kind:"text",value:row=>row.name},
@@ -514,7 +520,26 @@ const EXCEL_COLUMNS={
     currency:{label:"币种",kind:"text",value:row=>row.currency},
     status:{label:"状态",kind:"text",value:row=>row.status},
     po_number:{label:"PO 号",kind:"text",value:row=>row.po_number},
+    settlement_mode:{label:"结算方式",kind:"text",value:row=>row.settlement_mode,format:settlementModeZh},
   },
+};
+const PO_MORE_FIELDS=[
+  {field:"id",label:"PO记录ID",kind:"number",value:row=>row.id},
+  {field:"translator_id",label:"译员ID",kind:"number",value:row=>row.translator_id},
+  {field:"source_lang",label:"源语言",kind:"text",value:row=>row.source_lang},
+  {field:"target_lang",label:"目标语言",kind:"text",value:row=>row.target_lang},
+  {field:"expected_amount",label:"系统计算金额",kind:"number",value:row=>row.expected_amount},
+  {field:"amount_ok",label:"金额校验通过",kind:"boolean",value:row=>row.amount_ok},
+  {field:"remarks",label:"备注",kind:"text",value:row=>row.remarks},
+  {field:"source_key",label:"导入来源唯一键",kind:"text",value:row=>row.source_key},
+  {field:"source_name",label:"导入来源文件",kind:"text",value:row=>row.source_name},
+  {field:"source_row",label:"导入来源行",kind:"number",value:row=>row.source_row},
+];
+const EXCEL_OPERATORS={
+  text:[["contains","包含"],["eq","等于"],["in","属于列表"],["empty","为空"],["not_empty","非空"]],
+  number:[["eq","等于"],["gte","大于等于"],["lte","小于等于"],["between","区间"],["empty","为空"],["not_empty","非空"]],
+  date:[["eq","等于"],["gte","不早于"],["lte","不晚于"],["between","日期区间"],["empty","为空"],["not_empty","非空"]],
+  boolean:[["eq","等于"],["empty","为空"],["not_empty","非空"]],
 };
 
 function poLanguagePairText(row) {
@@ -523,6 +548,9 @@ function poLanguagePairText(row) {
 }
 function pricingModeZh(value) {
   return {per_1000:"按千字",per_hour:"按小时",fixed:"一口价",manual:"手工"}[value]||value||"";
+}
+function settlementModeZh(value) {
+  return {monthly:"月结",cumulative:"累计结"}[value]||value||"";
 }
 function excelRawValue(def,row) {
   const value=def.value(row);
@@ -544,18 +572,68 @@ function translatorSearchRows() {
   const q=document.getElementById("search").value.trim().toLowerCase();
   return DATA.filter(row=>!q||[row.name,row.language_pairs,currentProjectText(row)].some(value=>(value||"").toLowerCase().includes(q)));
 }
-function excelBaseRows(grid,forField=null) {
+function excelBaseRows(grid) {
   if(grid==="tr")return translatorSearchRows();
-  const month=document.getElementById("poMonth")?.value;
-  const excelMonthActive=Object.hasOwn(EXCEL_FILTERS.po,"settlement_month");
-  if(forField==="settlement_month"||excelMonthActive||!month)return PO_ALL_ROWS;
-  return PO_ALL_ROWS.filter(row=>row.settlement_month===month);
+  return PO_ALL_ROWS;
+}
+function splitExcelValues(value) {
+  return String(value??"").split(/[,，;；]/).map(item=>item.trim()).filter(Boolean);
+}
+function matchesExcelCondition(raw,condition,def) {
+  if(!condition)return true;
+  const blank=raw===EXCEL_BLANK;
+  if(condition.op==="empty")return blank;
+  if(condition.op==="not_empty")return !blank;
+  if(blank)return false;
+  const targets=splitExcelValues(condition.value);
+  if(def.kind==="number") {
+    const actual=Number(raw);
+    if(!Number.isFinite(actual))return false;
+    if(condition.op==="between") {
+      const low=Number(targets[0]),high=Number(targets[1]);
+      return targets.length===2&&Number.isFinite(low)&&Number.isFinite(high)&&low<=actual&&actual<=high;
+    }
+    const expected=Number(condition.value);
+    if(!Number.isFinite(expected))return false;
+    if(condition.op==="eq")return actual===expected;
+    if(condition.op==="gte")return actual>=expected;
+    if(condition.op==="lte")return actual<=expected;
+    return false;
+  }
+  const rawText=String(raw).trim().toLocaleLowerCase("zh-CN");
+  const shownText=excelDisplayValue(def,raw).trim().toLocaleLowerCase("zh-CN");
+  const candidates=[rawText,shownText];
+  const expected=String(condition.value??"").trim().toLocaleLowerCase("zh-CN");
+  if(condition.op==="in") {
+    const allowed=new Set(targets.map(item=>item.toLocaleLowerCase("zh-CN")));
+    return candidates.some(item=>allowed.has(item));
+  }
+  if(condition.op==="eq")return candidates.some(item=>item===expected);
+  if(condition.op==="contains")return candidates.some(item=>item.includes(expected));
+  if(condition.op==="gte")return rawText>=expected;
+  if(condition.op==="lte")return rawText<=expected;
+  if(condition.op==="between") {
+    const bounds=targets.map(item=>item.toLocaleLowerCase("zh-CN"));
+    return bounds.length===2&&bounds[0]<=rawText&&rawText<=bounds[1];
+  }
+  return false;
+}
+function applyMoreFilters(grid,rows) {
+  if(grid!=="po"||!MORE_FILTERS.po.length)return rows;
+  const fields=new Map(PO_MORE_FIELDS.map(item=>[item.field,item]));
+  return rows.filter(row=>MORE_FILTERS.po.every(condition=>{
+    const def=fields.get(condition.field);
+    if(!def)return true;
+    return matchesExcelCondition(excelRawValue(def,row),condition,def);
+  }));
 }
 function applyExcelState(grid,rows,{skipField=null,sort=true}={}) {
   const columns=EXCEL_COLUMNS[grid];
-  let result=rows.filter(row=>Object.entries(EXCEL_FILTERS[grid]).every(([field,selected])=>
-    field===skipField||selected.has(excelRawValue(columns[field],row))
-  ));
+  let result=applyMoreFilters(grid,rows).filter(row=>Object.entries(EXCEL_FILTERS[grid]).every(([field,state])=>{
+    if(field===skipField)return true;
+    const def=columns[field],raw=excelRawValue(def,row);
+    return (!state.selected||state.selected.has(raw))&&matchesExcelCondition(raw,state.condition,def);
+  }));
   const order=EXCEL_SORT[grid];
   if(sort&&order&&columns[order.field]) {
     const def=columns[order.field],direction=order.direction==="desc"?-1:1;
@@ -576,6 +654,11 @@ function initExcelHeaders() {
     const label=EXCEL_COLUMNS[grid]?.[field]?.label||th.textContent.trim();
     th.innerHTML=`<span class="excel-th"><span class="excel-th-label">${esc(label)}</span><button class="excel-filter-trigger" type="button" aria-haspopup="dialog" aria-label="${esc(label)}筛选" title="${esc(label)}：筛选或排序" onclick="openExcelFilter(event,'${grid}','${field}')">▾</button></span>`;
   });
+  document.querySelectorAll("th[data-excel-more-grid]").forEach(th=>{
+    if(th.querySelector(".excel-more-trigger"))return;
+    const grid=th.dataset.excelMoreGrid;
+    th.innerHTML=`<span class="excel-th"><span class="excel-th-label">更多字段</span><button class="excel-more-trigger" type="button" aria-haspopup="dialog" aria-label="更多字段筛选" title="筛选未展示字段" onclick="openExcelMore(event,'${grid}')">＋</button></span>`;
+  });
   refreshExcelHeaders("tr");
   refreshExcelHeaders("po");
 }
@@ -590,6 +673,12 @@ function refreshExcelHeaders(grid) {
     button.textContent=order?(order.direction==="asc"?"↑":"↓"):"▾";
     button.setAttribute("aria-pressed",filtered||order?"true":"false");
   });
+  const more=document.querySelector(`th[data-excel-more-grid="${grid}"] .excel-more-trigger`);
+  if(more) {
+    more.classList.toggle("active",MORE_FILTERS[grid].length>0);
+    more.textContent=MORE_FILTERS[grid].length?String(MORE_FILTERS[grid].length):"＋";
+    more.setAttribute("aria-pressed",MORE_FILTERS[grid].length?"true":"false");
+  }
 }
 function collectExcelOptions(grid,field) {
   const def=EXCEL_COLUMNS[grid][field];
@@ -600,21 +689,77 @@ function collectExcelOptions(grid,field) {
     counts.set(key,(counts.get(key)||0)+1);
   });
   const active=EXCEL_FILTERS[grid][field];
-  if(active)active.forEach(key=>{if(!counts.has(key))counts.set(key,0);});
+  if(active?.selected)active.selected.forEach(key=>{if(!counts.has(key))counts.set(key,0);});
   const keys=[...counts.keys()].sort((left,right)=>excelCompare(def,left,right));
   return {keys,counts};
 }
+function excelOperatorOptions(kind,selected="") {
+  return `<option value="">无条件筛选</option>`+(EXCEL_OPERATORS[kind]||EXCEL_OPERATORS.text).map(([value,label])=>`<option value="${value}" ${value===selected?"selected":""}>${label}</option>`).join("");
+}
+function excelInputType(kind,field) {
+  if(kind==="number")return "number";
+  if(kind==="date")return field==="settlement_month"?"month":"date";
+  return "text";
+}
+function renderConditionInputs(prefix,kind,field,condition=null) {
+  const op=document.getElementById(prefix+"Op").value;
+  const target=document.getElementById(prefix+"Inputs");
+  if(["empty","not_empty"].includes(op)||!op){target.innerHTML=op?`<span class="muted">无需填写值</span>`:"";return;}
+  if(kind==="boolean") {
+    const selected=String(condition?.value??"");
+    target.innerHTML=`<select id="${prefix}Value" onchange="refreshExcelApplyState()"><option value="">请选择</option><option value="true" ${selected==="true"?"selected":""}>是</option><option value="false" ${selected==="false"?"selected":""}>否</option></select>`;
+    return;
+  }
+  const type=excelInputType(kind,field),step=kind==="number"?' step="any"':"";
+  if(op==="between") {
+    const values=splitExcelValues(condition?.value);
+    target.innerHTML=`<div class="excel-condition-value-pair"><input id="${prefix}Value1" type="${type}"${step} value="${esc(values[0]||"")}" placeholder="起始" oninput="refreshExcelApplyState()"><input id="${prefix}Value2" type="${type}"${step} value="${esc(values[1]||"")}" placeholder="结束" oninput="refreshExcelApplyState()"></div>`;
+    return;
+  }
+  const placeholder=op==="in"?"多个值用逗号分隔":"输入筛选值";
+  target.innerHTML=`<input id="${prefix}Value" type="${type}"${step} value="${esc(condition?.value||"")}" placeholder="${placeholder}" oninput="refreshExcelApplyState()">`;
+}
+function readConditionDraft(prefix) {
+  const op=document.getElementById(prefix+"Op").value;
+  if(!op)return null;
+  if(["empty","not_empty"].includes(op))return {op,value:null};
+  if(op==="between") {
+    const first=document.getElementById(prefix+"Value1")?.value.trim()||"";
+    const second=document.getElementById(prefix+"Value2")?.value.trim()||"";
+    return first&&second?{op,value:`${first},${second}`}:undefined;
+  }
+  const value=document.getElementById(prefix+"Value")?.value.trim()||"";
+  return value?{op,value}:undefined;
+}
+function validateExcelCondition(kind,condition) {
+  if(!condition||condition.op!=="between")return true;
+  const [first,second]=splitExcelValues(condition.value);
+  const reversed=kind==="number"?Number(first)>Number(second):first>second;
+  return !reversed||failField("区间起始值不能大于结束值");
+}
+function refreshExcelApplyState() {
+  const apply=document.getElementById("excelApply");
+  if(apply&&!document.getElementById("excelFilterMenu").hidden)apply.disabled=!EXCEL_MENU_STATE.selected.size||readConditionDraft("excelCondition")===undefined;
+}
+function renderExcelConditionInputs(condition=null) {
+  renderConditionInputs("excelCondition",EXCEL_MENU_STATE.kind,EXCEL_MENU_STATE.field,condition);
+  refreshExcelApplyState();
+}
 function openExcelFilter(event,grid,field) {
   event.stopPropagation();
+  closeExcelMore();
   const menu=document.getElementById("excelFilterMenu");
   const def=EXCEL_COLUMNS[grid]?.[field];
   if(!def)return;
   const {keys,counts}=collectExcelOptions(grid,field);
   const active=EXCEL_FILTERS[grid][field];
-  EXCEL_MENU_STATE={grid,field,allKeys:keys,counts,selected:active?new Set(active):new Set(keys)};
+  EXCEL_MENU_STATE={grid,field,kind:def.kind,allKeys:keys,counts,selected:active?.selected?new Set(active.selected):new Set(keys)};
   document.getElementById("excelFilterTitle").textContent=def.label+"筛选";
+  document.getElementById("excelConditionKind").textContent={text:"文本",number:"数值",date:"日期",boolean:"是/否"}[def.kind]||"";
+  document.getElementById("excelConditionOp").innerHTML=excelOperatorOptions(def.kind,active?.condition?.op);
   document.getElementById("excelValueSearch").value="";
   menu.hidden=false;
+  renderExcelConditionInputs(active?.condition||null);
   renderExcelFilterOptions();
   positionExcelFilter(event.currentTarget);
   requestAnimationFrame(()=>document.getElementById("excelValueSearch").focus({preventScroll:true}));
@@ -659,7 +804,7 @@ function renderExcelFilterOptions() {
   selectAll.disabled=!keys.length;
   document.getElementById("excelSelectAllLabel").textContent=`全选当前结果（${keys.length}）`;
   document.getElementById("excelFilterMeta").textContent=`已选 ${selected.size}/${EXCEL_MENU_STATE.allKeys.length}`;
-  document.getElementById("excelApply").disabled=!selected.size;
+  refreshExcelApplyState();
   const order=EXCEL_SORT[grid];
   document.getElementById("excelSortAsc").classList.toggle("on",order?.field===field&&order.direction==="asc");
   document.getElementById("excelSortDesc").classList.toggle("on",order?.field===field&&order.direction==="desc");
@@ -680,9 +825,12 @@ function toggleExcelSelectAll(checked) {
 function applyExcelCurrentField() {
   const {grid,field,allKeys,selected}=EXCEL_MENU_STATE;
   if(!grid||!field)return;
+  const condition=readConditionDraft("excelCondition");
+  if(condition===undefined)return;
+  if(!validateExcelCondition(EXCEL_MENU_STATE.kind,condition))return;
   const allSelected=allKeys.length===selected.size&&allKeys.every(key=>selected.has(key));
-  if(allSelected)delete EXCEL_FILTERS[grid][field];
-  else EXCEL_FILTERS[grid][field]=new Set(selected);
+  if(allSelected&&!condition)delete EXCEL_FILTERS[grid][field];
+  else EXCEL_FILTERS[grid][field]={selected:allSelected?null:new Set(selected),condition};
   closeExcelFilter();
   rerenderExcelGrid(grid);
 }
@@ -704,16 +852,20 @@ function removeExcelFilter(grid,field) {
   delete EXCEL_FILTERS[grid][field];
   rerenderExcelGrid(grid);
 }
-function clearExcelFilters(grid) {
+async function clearExcelFilters(grid) {
   EXCEL_FILTERS[grid]={};
   EXCEL_SORT[grid]=null;
-  closeExcelFilter();
-  rerenderExcelGrid(grid);
+  MORE_FILTERS[grid]=[];
+  closeAllExcelMenus();
+  if(grid==="tr") {
+    FILTER_QUERY="";
+    await load();
+  } else rerenderExcelGrid(grid);
 }
 function closeExcelFilter() {
   const menu=document.getElementById("excelFilterMenu");
   menu.hidden=true;
-  EXCEL_MENU_STATE={grid:null,field:null,allKeys:[],counts:new Map(),selected:new Set()};
+  EXCEL_MENU_STATE={grid:null,field:null,kind:null,allKeys:[],counts:new Map(),selected:new Set()};
 }
 function rerenderExcelGrid(grid) {
   if(grid==="tr")render();
@@ -721,13 +873,134 @@ function rerenderExcelGrid(grid) {
 }
 function renderExcelFilterBar(grid,visible,total) {
   const bar=document.getElementById(grid==="tr"?"trExcelBar":"poExcelBar");
-  const columns=EXCEL_COLUMNS[grid],filters=Object.entries(EXCEL_FILTERS[grid]),order=EXCEL_SORT[grid];
-  if(!filters.length&&!order){bar.hidden=true;bar.innerHTML="";refreshExcelHeaders(grid);return;}
-  const chips=filters.map(([field,selected])=>`<span class="excel-filter-chip">${esc(columns[field].label)}：${selected.size} 项<button type="button" aria-label="清除${esc(columns[field].label)}筛选" onclick="removeExcelFilter('${grid}','${field}')">×</button></span>`).join("");
+  const columns=EXCEL_COLUMNS[grid],filters=Object.entries(EXCEL_FILTERS[grid]),more=MORE_FILTERS[grid],order=EXCEL_SORT[grid];
+  if(!filters.length&&!more.length&&!order){bar.hidden=true;bar.innerHTML="";refreshExcelHeaders(grid);return;}
+  const chips=filters.map(([field,state])=>{
+    const parts=[];
+    if(state.selected)parts.push(`${state.selected.size} 项`);
+    if(state.condition)parts.push(excelConditionLabel(state.condition,columns[field].kind));
+    return `<span class="excel-filter-chip">${esc(columns[field].label)}：${esc(parts.join(" · "))}<button type="button" aria-label="清除${esc(columns[field].label)}筛选" onclick="removeExcelFilter('${grid}','${field}')">×</button></span>`;
+  }).join("");
+  const moreFields=new Map(getExcelMoreFields(grid).map(item=>[item.field,item]));
+  const moreChips=more.map((condition,index)=>`<span class="excel-filter-chip">${esc(moreFields.get(condition.field)?.label||condition.field)}：${esc(excelConditionLabel(condition,moreFields.get(condition.field)?.kind||"text"))}<button type="button" aria-label="清除此条件" onclick="removeExcelMoreFilter('${grid}',${index})">×</button></span>`).join("");
   const sortChip=order?`<span class="excel-filter-chip">${esc(columns[order.field].label)}：${order.direction==="asc"?"升序":"降序"}<button type="button" aria-label="清除排序" onclick="EXCEL_SORT['${grid}']=null;rerenderExcelGrid('${grid}')">×</button></span>`:"";
   bar.hidden=false;
-  bar.innerHTML=`<span class="excel-filter-bar-label">表头筛选 ${visible}/${total}</span>${chips}${sortChip}<button class="excel-filter-clear-all" type="button" onclick="clearExcelFilters('${grid}')">全部清除</button>`;
+  bar.innerHTML=`<span class="excel-filter-bar-label">表头筛选 ${visible}/${total}</span>${chips}${moreChips}${sortChip}<button class="excel-filter-clear-all" type="button" onclick="clearExcelFilters('${grid}')">全部清除</button>`;
   refreshExcelHeaders(grid);
+}
+function excelConditionLabel(condition,kind) {
+  const label=(EXCEL_OPERATORS[kind]||EXCEL_OPERATORS.text).find(([value])=>value===condition.op)?.[1]||condition.op;
+  return ["empty","not_empty"].includes(condition.op)?label:`${label} ${condition.value}`;
+}
+function getExcelMoreFields(grid) {
+  if(grid==="po")return PO_MORE_FIELDS;
+  const visible=new Set(Object.keys(EXCEL_COLUMNS.tr));
+  return FILTER_FIELDS.filter(item=>!visible.has(item.field));
+}
+function renderExcelMoreFields() {
+  const grid=EXCEL_MORE_STATE.grid;
+  if(!grid)return;
+  const select=document.getElementById("excelMoreField"),previous=select.value;
+  const query=document.getElementById("excelMoreSearch").value.trim().toLocaleLowerCase("zh-CN");
+  const fields=getExcelMoreFields(grid).filter(item=>!query||`${item.label} ${item.field}`.toLocaleLowerCase("zh-CN").includes(query));
+  select.innerHTML=fields.length?fields.map(item=>`<option value="${esc(item.field)}">${esc(item.label)}</option>`).join(""):`<option value="">没有匹配字段</option>`;
+  if(fields.some(item=>item.field===previous))select.value=previous;
+  renderExcelMoreEditor();
+}
+function renderExcelMoreEditor() {
+  const grid=EXCEL_MORE_STATE.grid,field=document.getElementById("excelMoreField").value;
+  const def=getExcelMoreFields(grid).find(item=>item.field===field);
+  EXCEL_MORE_STATE.kind=def?.kind||null;
+  document.getElementById("excelMoreFieldLabel").textContent=def?.label||"选择字段";
+  document.getElementById("excelMoreKind").textContent={text:"文本",number:"数值",date:"日期",boolean:"是/否"}[def?.kind]||"";
+  document.getElementById("excelMoreOp").innerHTML=def?excelOperatorOptions(def.kind,(EXCEL_OPERATORS[def.kind]||EXCEL_OPERATORS.text)[0][0]):"";
+  renderExcelMoreInputs();
+}
+function renderExcelMoreInputs() {
+  const field=document.getElementById("excelMoreField").value;
+  if(!EXCEL_MORE_STATE.kind){document.getElementById("excelMoreInputs").innerHTML="";return;}
+  renderConditionInputs("excelMore",EXCEL_MORE_STATE.kind,field);
+}
+function renderExcelMoreConditions() {
+  const grid=EXCEL_MORE_STATE.grid;
+  if(!grid)return;
+  const fields=new Map(getExcelMoreFields(grid).map(item=>[item.field,item]));
+  const list=MORE_FILTERS[grid];
+  document.getElementById("excelMoreMeta").textContent=`${list.length}/20`;
+  document.getElementById("excelMoreConditionList").innerHTML=list.length?list.map((condition,index)=>{
+    const def=fields.get(condition.field);
+    return `<div class="excel-more-condition"><span>${esc(def?.label||condition.field)} · ${esc(excelConditionLabel(condition,def?.kind||"text"))}</span><button type="button" aria-label="删除条件" onclick="removeExcelMoreFilter('${grid}',${index})">×</button></div>`;
+  }).join(""):`<div class="excel-option-empty">尚未添加更多字段条件</div>`;
+}
+function openExcelMore(event,grid) {
+  event.stopPropagation();
+  closeExcelFilter();
+  EXCEL_MORE_STATE={grid,kind:null};
+  document.getElementById("excelMoreSearch").value="";
+  const menu=document.getElementById("excelMoreMenu");
+  menu.hidden=false;
+  renderExcelMoreFields();
+  renderExcelMoreConditions();
+  positionFloatingExcelMenu(menu,event.currentTarget);
+  requestAnimationFrame(()=>document.getElementById("excelMoreSearch").focus({preventScroll:true}));
+}
+function positionFloatingExcelMenu(menu,anchor) {
+  const rect=anchor.getBoundingClientRect(),width=menu.offsetWidth,height=menu.offsetHeight,gap=5;
+  let left=Math.min(rect.right-width,window.innerWidth-width-12);
+  left=Math.max(12,left);
+  let top=rect.bottom+gap;
+  if(top+height>window.innerHeight-12)top=Math.max(12,rect.top-height-gap);
+  menu.style.left=left+"px";
+  menu.style.top=top+"px";
+}
+async function addExcelMoreFilter() {
+  const grid=EXCEL_MORE_STATE.grid,field=document.getElementById("excelMoreField").value;
+  if(!grid||!field)return;
+  if(MORE_FILTERS[grid].length>=20)return failField("更多字段筛选最多添加 20 条");
+  const condition=readConditionDraft("excelMore");
+  if(condition===undefined||condition===null)return failField("请完整填写筛选条件");
+  if(!validateExcelCondition(EXCEL_MORE_STATE.kind,condition))return;
+  MORE_FILTERS[grid].push({field,...condition});
+  renderExcelMoreConditions();
+  refreshExcelHeaders(grid);
+  if(grid==="tr")await applyTranslatorMoreFilters();
+  else renderPOGrid();
+}
+async function removeExcelMoreFilter(grid,index) {
+  MORE_FILTERS[grid].splice(index,1);
+  if(EXCEL_MORE_STATE.grid===grid)renderExcelMoreConditions();
+  if(grid==="tr")await applyTranslatorMoreFilters();
+  else renderPOGrid();
+}
+async function clearExcelMoreFilters() {
+  const grid=EXCEL_MORE_STATE.grid;
+  if(!grid)return;
+  MORE_FILTERS[grid]=[];
+  renderExcelMoreConditions();
+  if(grid==="tr")await applyTranslatorMoreFilters();
+  else renderPOGrid();
+}
+async function applyTranslatorMoreFilters() {
+  const params=new URLSearchParams();
+  if(MORE_FILTERS.tr.length)params.set("filters",JSON.stringify(MORE_FILTERS.tr));
+  FILTER_QUERY=params.toString()?`?${params.toString()}`:"";
+  await load();
+}
+function closeExcelMore() {
+  const menu=document.getElementById("excelMoreMenu");
+  menu.hidden=true;
+  EXCEL_MORE_STATE={grid:null,kind:null};
+}
+function closeAllExcelMenus() {
+  closeExcelFilter();
+  closeExcelMore();
+}
+function repositionExcelMenus() {
+  repositionExcelFilter();
+  const menu=document.getElementById("excelMoreMenu"),grid=EXCEL_MORE_STATE.grid;
+  if(menu.hidden||!grid)return;
+  const anchor=document.querySelector(`th[data-excel-more-grid="${grid}"] .excel-more-trigger`);
+  if(anchor)positionFloatingExcelMenu(menu,anchor);
 }
 
 /* ---- 鉴权 ---- */
@@ -782,7 +1055,7 @@ const get = p => fetch(p).then(r => r.json());
 
 /* ---- 标签 ---- */
 function showTab(t) {
-  closeExcelFilter();
+  closeAllExcelMenus();
   ["tr","po","pending","audit"].forEach(x => {
     document.getElementById("view-"+x).style.display = x===t ? "" : "none";
     document.getElementById("tab-"+x).classList.toggle("on", x===t);
@@ -805,7 +1078,6 @@ async function load() {
   FILTER_FIELDS = filterFields;
   LANG_OPTIONS = [...new Set(pairs.flatMap(p => [p.source_lang, p.target_lang]))];
   renderLanguageOptions();
-  renderGenericFilterFields();
   const nativeStats = Object.entries(ov.native_languages||{}).map(([k,v])=>`${esc(k)} ${v}`).join(" · ") || "—";
   const pairStats = Object.entries(ov.language_pairs||{}).map(([k,v])=>`${esc(k)} ${v}`).join(" · ") || "—";
   document.getElementById("cards").innerHTML = `
@@ -817,56 +1089,6 @@ async function load() {
     <div class="card"><div class="stat-note">${nativeStats}</div><div class="l">母语人数</div></div>
     <div class="card"><div class="stat-note">${pairStats}</div><div class="l">语言对覆盖</div></div>`;
   render();
-}
-function filterValue(id){ return document.getElementById(id).value.trim(); }
-function renderGenericFilterFields() {
-  const select=document.getElementById("fs-any-field");
-  if(!select||select.options.length)return;
-  select.innerHTML=FILTER_FIELDS.map(item=>`<option value="${esc(item.field)}">${esc(item.label)}</option>`).join("");
-}
-function renderGenericFilters() {
-  const box=document.getElementById("fs-any-list");
-  if(!GENERIC_FILTERS.length){box.textContent="尚未添加字段条件";return;}
-  const opLabels={contains:"包含",eq:"等于",in:"属于",gte:"≥",lte:"≤",between:"区间",empty:"为空",not_empty:"非空"};
-  box.innerHTML=GENERIC_FILTERS.map((item,index)=>{
-    const field=FILTER_FIELDS.find(candidate=>candidate.field===item.field);
-    return `<span class="chip">${esc(field?.label||item.field)} ${opLabels[item.op]||item.op}${["empty","not_empty"].includes(item.op)?"":" "+esc(item.value)} <button class="btn-link danger" type="button" onclick="removeGenericFilter(${index})">×</button></span>`;
-  }).join(" ");
-}
-function addGenericFilter() {
-  const field=filterValue("fs-any-field"),op=filterValue("fs-any-op"),value=filterValue("fs-any-value");
-  if(!field)return;
-  if(!["empty","not_empty"].includes(op)&&!value)return failField("请填写字段筛选值");
-  GENERIC_FILTERS.push({field,op,value:["empty","not_empty"].includes(op)?null:value});
-  document.getElementById("fs-any-value").value="";
-  renderGenericFilters();
-}
-function removeGenericFilter(index){GENERIC_FILTERS.splice(index,1);renderGenericFilters();}
-async function applyPreciseFilters() {
-  const params = new URLSearchParams();
-  [
-    ["source_lang","fs-source"],["target_lang","fs-target"],["native_language","fs-native"],
-    ["rate_type","fs-rate"],["min_rate","fs-min"],["max_rate","fs-max"],
-    ["currency","fs-currency"],["domain","fs-domain"],["has_wechat","fs-wechat"],
-    ["rating","fs-rating"],["gender","fs-gender"],["entity_type","fs-entity"],
-    ["availability","fs-availability"],
-  ].forEach(([key,id])=>{ const value=filterValue(id); if(value) params.set(key,value); });
-  if(GENERIC_FILTERS.length)params.set("filters",JSON.stringify(GENERIC_FILTERS));
-  if ((params.has("min_rate")||params.has("max_rate")) && (!params.has("rate_type")||!params.has("currency"))) {
-    return failField("价格区间必须同时选择价格类型和币种");
-  }
-  FILTER_QUERY = params.toString() ? "?" + params.toString() : "";
-  await load();
-}
-async function resetPreciseFilters() {
-  document.querySelectorAll(".filter-grid input,.filter-grid select").forEach(control=>control.value="");
-  GENERIC_FILTERS=[];
-  renderGenericFilterFields();
-  if(document.getElementById("fs-any-field").options.length)document.getElementById("fs-any-field").selectedIndex=0;
-  document.getElementById("fs-any-op").value="contains";
-  renderGenericFilters();
-  FILTER_QUERY = "";
-  await load();
 }
 function exportFiltered() {
   const columns = ["name","native_language","language_pairs","internal_rating","domains","wechat","entity_type","gender","computed_availability","computed_load_pct"];
@@ -890,6 +1112,7 @@ function render() {
       <td>${esc(t.language_pairs)||m()}</td><td><span class="pill s-${t.status}">${statusZh(t.status)}</span></td>
       <td>${esc(t.internal_rating)||m()}</td><td class="project-cell">${currentProjectHtml(t)}</td>
       <td>${availabilityHtml(t)}</td><td>${exp}</td><td>${esc(t.last_contact)||m()}</td>
+      <td class="muted">—</td>
       <td><button class="btn-link edit-only" onclick="openEdit(${t.id})">编辑</button>
           <button class="btn-link danger edit-only" onclick='delTr(${t.id}, ${JSON.stringify(t.name)})'>删除</button></td>
     </tr>`;
@@ -1771,37 +1994,16 @@ function month(){ return new Date().toISOString().slice(0,7); }
 
 /* ---- PO ---- */
 async function loadPO() {
-  const sel = document.getElementById("poMonth");
-  if (!sel.options.length) {
-    const all = await get("/api/po");
-    const months = [...new Set(all.map(p=>p.settlement_month))].sort().reverse();
-    sel.innerHTML = months.map(mo=>`<option>${mo}</option>`).join("") || "<option>2026-06</option>";
+  const [allRows,translators]=await Promise.all([get("/api/po"),get("/api/translators")]);
+  PO_TRANSLATORS=translators;
+  const translatorMap=new Map(translators.map(item=>[item.id,item]));
+  PO_ALL_ROWS=allRows.map(row=>({...row,settlement_mode:translatorMap.get(row.translator_id)?.settlement_mode||""}));
+  PO_ROWS=PO_ALL_ROWS;
+  if(!PO_FILTER_INITIALIZED) {
+    const latest=[...new Set(PO_ALL_ROWS.map(row=>row.settlement_month).filter(Boolean))].sort().reverse()[0];
+    if(latest)EXCEL_FILTERS.po.settlement_month={selected:new Set([latest]),condition:null};
+    PO_FILTER_INITIALIZED=true;
   }
-  const month = sel.value;
-  const baseParams = new URLSearchParams();
-  [
-    ["status", filterValue("poStatus")],
-    ["translator", filterValue("poTranslator")],
-    ["project", filterValue("poProject")],
-    ["role", filterValue("poRole")],
-    ["source_lang", filterValue("poSourceLang")],
-    ["target_lang", filterValue("poTargetLang")],
-    ["currency", filterValue("poCurrency")],
-    ["pricing_mode", filterValue("poPricingMode")],
-    ["settlement_mode", filterValue("poSettlementMode")],
-    ["min_amount", filterValue("poMinAmount")],
-    ["max_amount", filterValue("poMaxAmount")],
-    ["po_number", filterValue("poNumber")],
-  ].forEach(([key,value])=>{ if(value) baseParams.set(key,value); });
-  if(baseParams.has("min_amount")&&baseParams.has("max_amount")&&Number(baseParams.get("min_amount"))>Number(baseParams.get("max_amount")))return failField("最低金额不能大于最高金额");
-  const summaryParams=new URLSearchParams(baseParams);
-  summaryParams.set("month",month);
-  const [allRows, sum] = await Promise.all([
-    get(`/api/po?${baseParams.toString()}`),
-    get(`/api/po/summary?${summaryParams.toString()}`)]);
-  PO_ALL_ROWS=allRows;
-  PO_ROWS=allRows;
-  PO_SERVER_SUMMARY=sum;
   renderPOGrid();
 }
 function computePOSummary(currentRows,allRows) {
@@ -1824,15 +2026,13 @@ function computePOSummary(currentRows,allRows) {
 function renderPOGrid() {
   const baseRows=excelBaseRows("po");
   const list=applyExcelState("po",baseRows);
-  const allFiltered=applyExcelState("po",PO_ALL_ROWS,{sort:false});
-  const summary=Object.keys(EXCEL_FILTERS.po).length
-    ? computePOSummary(list,allFiltered)
-    : (PO_SERVER_SUMMARY||computePOSummary(list,allFiltered));
+  const cumulativeRows=applyExcelState("po",PO_ALL_ROWS,{skipField:"settlement_month",sort:false});
+  const summary=computePOSummary(list,cumulativeRows);
   document.getElementById("poCards").innerHTML = Object.entries(summary.by_currency||{}).map(([c,v]) =>
     `<div class="card"><div class="n num">${fmt(v.unpaid)}</div><div class="l">${c} 待付</div></div>
      <div class="card"><div class="n num">${fmt(v.paid)}</div><div class="l">${c} 已付</div></div>`).join("")
     + Object.entries(summary.cumulative_unpaid_by_currency||{}).map(([c,v])=>`<div class="card"><div class="n num">${fmt(v)}</div><div class="l">${c} 跨月累计未付</div></div>`).join("")
-    || `<div class="card"><div class="n">0</div><div class="l">本月无数据</div></div>`;
+    || `<div class="card"><div class="n">0</div><div class="l">当前筛选无数据</div></div>`;
   document.getElementById("poCount").textContent = list.length===baseRows.length?`筛选结果 ${list.length} 行`:`显示 ${list.length} / ${baseRows.length} 行`;
   renderExcelFilterBar("po",list.length,baseRows.length);
   document.getElementById("poEmpty").style.display = list.length ? "none" : "block";
@@ -1843,17 +2043,8 @@ function renderPOGrid() {
     return `<tr><td><button class="namebtn" onclick="showTranslatorUnpaid(${p.translator_id})">${esc(p.translator_name)}</button></td><td>${esc(p.settlement_month)}</td><td>${esc(p.project)||m()}</td><td>${langPair(p)}</td><td>${esc(p.role)||m()}</td><td>${esc(modeLabel)}</td>
       <td class="num">${p.word_count??m()}</td><td class="num">${p.rate??m()}</td><td>${amt}</td><td>${esc(p.currency)}</td>
       <td><span class="pill po-status-read st-${p.status}">${esc(p.status)}</span><select class="statussel edit-only" onchange="setPOStatus(${p.id},this.value)">${opts}</select></td>
-      <td class="muted">${esc(p.po_number)||"—"}</td><td><button class="btn-link edit-only" onclick="editPO(${p.id})">人工修正</button></td></tr>`;
+      <td class="muted">${esc(p.po_number)||"—"}</td><td>${detailVal(settlementModeZh(p.settlement_mode))}</td><td class="muted">—</td><td><button class="btn-link edit-only" onclick="editPO(${p.id})">人工修正</button></td></tr>`;
   }).join("");
-}
-async function applyPOFilters() { await loadPO(); }
-async function resetPOFilters() {
-  ["poStatus","poTranslator","poProject","poRole","poSourceLang","poTargetLang","poCurrency","poPricingMode","poSettlementMode","poMinAmount","poMaxAmount","poNumber"].forEach(id=>document.getElementById(id).value="");
-  const monthSelect=document.getElementById("poMonth");
-  if(monthSelect.options.length)monthSelect.selectedIndex=0;
-  EXCEL_FILTERS.po={};
-  EXCEL_SORT.po=null;
-  await loadPO();
 }
 async function setPOStatus(id, status) { try { const res = await api("PUT",`/api/po/${id}/status`,{status}); if (res && res.pending) showToast(res.msg||"已提交待人工审核", "info"); loadPO(); } catch(e){ loadPO(); } }
 function renderProjectlistPreview(preview) {
@@ -1906,20 +2097,29 @@ async function importPOFile(input) {
     result.title=(data.invalid_rows||[]).map(x=>`${x.sheet||""} 第 ${x.row} 行：${x.error}`).join("\n");
     showToast(summary,invalid?"info":"success");
     if(invalid)console.warn("PO import invalid_rows",data.invalid_rows);
-    document.getElementById("poMonth").innerHTML = "";
     loadPO();
   } finally {
     PO_IMPORT_FILE=null;
     input.value = "";
   }
 }
+function selectedPOMonth() {
+  const state=EXCEL_FILTERS.po.settlement_month;
+  if(state?.selected?.size===1) {
+    const selected=[...state.selected][0];
+    if(selected!==EXCEL_BLANK)return selected;
+  }
+  if(state?.condition?.op==="eq"&&state.condition.value)return state.condition.value;
+  return month();
+}
 function openPO() {
-  document.getElementById("p-translator_id").innerHTML = DATA.map(t=>`<option value="${t.id}">${esc(t.name)}</option>`).join("");
+  const translators=PO_TRANSLATORS.length?PO_TRANSLATORS:DATA;
+  document.getElementById("p-translator_id").innerHTML = translators.map(t=>`<option value="${t.id}">${esc(t.name)}</option>`).join("");
   document.getElementById("p-id").value="";
   document.getElementById("poModalTitle").textContent="新增 PO 结算行";
   document.getElementById("p-source_lang").value = "";
   document.getElementById("p-target_lang").value = "";
-  document.getElementById("p-settlement_month").value = document.getElementById("poMonth").value || month().replace(/-\d\d$/, "-06");
+  document.getElementById("p-settlement_month").value = selectedPOMonth();
   ["p-project","p-word_count","p-rate","p-amount","p-po_number","p-remarks"].forEach(i=>document.getElementById(i).value="");
   document.getElementById("p-pricing_mode").value="per_1000";
   document.getElementById("p-role").value="翻译";
@@ -1974,11 +2174,12 @@ async function savePO() {
   const id=val("p-id");
   try { const res = await api(id?"PUT":"POST",id?`/api/po/${id}`:"/api/po", b);
     if (res && res.pending) showToast(res.msg || "已提交待人工审核", "info");
-    closeModal("poMask"); document.getElementById("poMonth").innerHTML=""; loadPO(); } catch(e){}
+    closeModal("poMask"); loadPO(); } catch(e){}
 }
 function editPO(id) {
   const p=PO_ROWS.find(row=>row.id===id);if(!p)return;
-  document.getElementById("p-translator_id").innerHTML=DATA.map(t=>`<option value="${t.id}">${esc(t.name)}</option>`).join("");
+  const translators=PO_TRANSLATORS.length?PO_TRANSLATORS:DATA;
+  document.getElementById("p-translator_id").innerHTML=translators.map(t=>`<option value="${t.id}">${esc(t.name)}</option>`).join("");
   document.getElementById("p-id").value=p.id;
   document.getElementById("poModalTitle").textContent="人工修正 PO";
   ["translator_id","settlement_month","project","source_lang","target_lang","role","pricing_mode","word_count","rate","amount","currency","status","po_number","remarks"].forEach(key=>{
@@ -2024,18 +2225,18 @@ async function rejectPend(id){ try{ await api("POST",`/api/pending/${id}/reject`
 if (document.addEventListener) {
   document.addEventListener("click", e => {
     if (!e.target.closest(".lang-combo")) closeLangMenus();
-    if (!e.target.closest("#excelFilterMenu")&&!e.target.closest(".excel-filter-trigger")) closeExcelFilter();
+    if (!e.target.closest("#excelFilterMenu")&&!e.target.closest("#excelMoreMenu")&&!e.target.closest(".excel-filter-trigger")&&!e.target.closest(".excel-more-trigger")) closeAllExcelMenus();
   });
   document.addEventListener("scroll", () => document.querySelectorAll(".lang-combo.open").forEach(positionLangMenu), true);
   document.addEventListener("scroll", e => {
-    if(!document.getElementById("excelFilterMenu").contains(e.target))requestAnimationFrame(repositionExcelFilter);
+    if(!document.getElementById("excelFilterMenu").contains(e.target)&&!document.getElementById("excelMoreMenu").contains(e.target))requestAnimationFrame(repositionExcelMenus);
   }, true);
-  document.addEventListener("keydown", e => { if(e.key==="Escape")closeExcelFilter(); });
+  document.addEventListener("keydown", e => { if(e.key==="Escape")closeAllExcelMenus(); });
 }
 if (typeof window !== "undefined" && window.addEventListener) {
   window.addEventListener("resize", () => {
     document.querySelectorAll(".lang-combo.open").forEach(positionLangMenu);
-    closeExcelFilter();
+    closeAllExcelMenus();
   });
 }
 document.getElementById("search").addEventListener("input", render);

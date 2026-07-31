@@ -3,7 +3,7 @@ import fs from "node:fs";
 
 const html = fs.readFileSync(new URL("../index.html", import.meta.url), "utf8");
 
-for (const id of [
+for (const removedId of [
   "fs-source",
   "fs-target",
   "fs-native",
@@ -18,11 +18,15 @@ for (const id of [
   "fs-entity",
   "fs-availability",
 ]) {
-  assert.match(html, new RegExp(`id="${id}"`), `${id} should exist`);
+  assert.doesNotMatch(html, new RegExp(`id="${removedId}"`), `${removedId} should be removed`);
 }
-assert.match(html, /function applyPreciseFilters/);
+assert.doesNotMatch(html, /function applyPreciseFilters/);
+assert.doesNotMatch(html, /function addGenericFilter/);
 assert.match(html, /function exportFiltered/);
-assert.match(html, /URLSearchParams/);
+assert.match(html, /function openExcelMore/);
+assert.match(html, /function addExcelMoreFilter/);
+assert.match(html, /function applyTranslatorMoreFilters/);
+assert.match(html, /MORE_FILTERS\.tr\.length\)params\.set\("filters"/);
 
 assert.match(html, /\["prices","项目价格"\]/);
 assert.match(html, /\["payment","支付账户"\]/);
@@ -51,9 +55,9 @@ assert.match(html, /id="f-manual_rating"/);
 assert.match(html, /id="f-manual_rating_reason"/);
 assert.match(html, /id="f-settlement_mode"/);
 assert.match(html, /\/api\/translator-filter-fields/);
-assert.match(html, /function addGenericFilter/);
-assert.match(html, /GENERIC_FILTERS\.length\)params\.set\("filters"/);
+assert.match(html, /getExcelMoreFields/);
+assert.match(html, /FILTER_FIELDS\.filter/);
 assert.match(html, /monthly_capacity/);
 assert.match(html, /&lt;50% 空闲；50%–&lt;80% 健康；80%–100% 饱和；&gt;100% 警告/);
 
-console.log("all feedback-requirement UI entry points are wired");
+console.log("feedback requirements use the unified Excel-style filter entry points");

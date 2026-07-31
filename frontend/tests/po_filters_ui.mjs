@@ -3,7 +3,7 @@ import fs from "node:fs";
 
 const html = fs.readFileSync(new URL("../index.html", import.meta.url), "utf8");
 
-for (const id of [
+for (const removedId of [
   "poMonth",
   "poTranslator",
   "poProject",
@@ -18,27 +18,29 @@ for (const id of [
   "poMaxAmount",
   "poNumber",
 ]) {
-  assert.match(html, new RegExp(`id="${id}"`), `${id} should exist`);
+  assert.doesNotMatch(html, new RegExp(`id="${removedId}"`), `${removedId} should be removed`);
 }
 
-assert.match(html, /PO 组合筛选（全部条件同时满足）/);
-assert.match(html, /function applyPOFilters/);
-assert.match(html, /function resetPOFilters/);
-assert.match(html, /\["translator", filterValue\("poTranslator"\)\]/);
-assert.match(html, /\["po_number", filterValue\("poNumber"\)\]/);
-assert.match(html, /\["source_lang", filterValue\("poSourceLang"\)\]/);
-assert.match(html, /\["target_lang", filterValue\("poTargetLang"\)\]/);
-assert.match(html, /\["pricing_mode", filterValue\("poPricingMode"\)\]/);
-assert.match(html, /\["settlement_mode", filterValue\("poSettlementMode"\)\]/);
-assert.match(html, /\["min_amount", filterValue\("poMinAmount"\)\]/);
-assert.match(html, /\["max_amount", filterValue\("poMaxAmount"\)\]/);
-assert.match(html, /new URLSearchParams\(\)/);
-assert.match(html, /get\(`\/api\/po\/summary\?\$\{summaryParams\.toString\(\)\}`\)/);
-assert.match(html, /get\(`\/api\/po\?\$\{baseParams\.toString\(\)\}`\)/);
-assert.match(html, /PO_ALL_ROWS=allRows/);
+assert.doesNotMatch(html, /PO 组合筛选（全部条件同时满足）/);
+assert.doesNotMatch(html, /function applyPOFilters/);
+assert.doesNotMatch(html, /function resetPOFilters/);
+assert.doesNotMatch(html, /\/api\/po\/summary/);
+assert.match(html, /data-excel-field="settlement_mode">结算方式<\/th>/);
+assert.match(html, /data-excel-more-grid="po"/);
+assert.match(html, /const PO_MORE_FIELDS=/);
+assert.match(html, /field:"source_lang"/);
+assert.match(html, /field:"target_lang"/);
+assert.match(html, /field:"remarks"/);
+assert.match(html, /field:"source_key"/);
+assert.match(html, /get\("\/api\/po"\)/);
+assert.match(html, /get\("\/api\/translators"\)/);
+assert.match(html, /PO_ALL_ROWS=allRows\.map/);
+assert.match(html, /EXCEL_FILTERS\.po\.settlement_month=\{selected:new Set\(\[latest\]\),condition:null\}/);
+assert.match(html, /skipField:"settlement_month"/);
+assert.match(html, /function selectedPOMonth/);
 assert.match(html, /renderPOGrid\(\)/);
 assert.match(html, /\/api\/po\/price-match/);
 assert.match(html, /\/api\/po\/unpaid\/\$\{translatorId\}/);
 assert.match(html, /function editPO/);
 
-console.log("PO combined-filter UI is wired");
+console.log("PO filtering is consolidated into Excel-style headers");
