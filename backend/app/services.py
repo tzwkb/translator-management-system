@@ -6,16 +6,19 @@ from sqlalchemy import select, update
 from sqlalchemy.exc import IntegrityError
 
 from .models import (PO, AuditLog, Complaint, LanguagePair, PendingChange,
-                     PendingIdempotency, QualityScore, RateChange, Translator)
+                     PendingIdempotency, ProjectPrice, QualityScore, RateChange,
+                     Translator, TranslatorProjectExperience)
 from .pending_safety import normalize_payload, pending_fingerprint
 
 PO_STATUSES = ["未开票", "已开票待付", "已支付", "有争议"]
+DEFAULT_DAILY_OUTPUT = 2000
+MONTHLY_WORK_DAYS = 20
 RATE_FIELDS = {"翻译": "translation_rate", "MTPE": "mtpe_rate", "审校": "review_rate",
                "LQA": "lqa_rate", "LQE": "lqe_rate"}
 LANGUAGE_OPTIONS = [
     "ZH", "ZH-HANS", "ZH-HANT", "ZH-CN", "ZH-TW", "ZH-HK",
     "EN", "EN-US", "EN-GB", "EN-AU", "EN-CA",
-    "JA", "KO",
+    "JA", "KO", "BO",
     "FR", "FR-FR", "FR-CA", "DE", "DE-DE", "ES", "ES-ES", "ES-LA", "ES-MX",
     "PT", "PT-BR", "PT-PT", "IT", "RU", "UK", "PL", "NL", "SV", "NO", "NB",
     "DA", "FI", "IS", "ET", "LV", "LT",
@@ -30,8 +33,14 @@ LANGUAGE_OPTIONS = [
 LANGUAGE_SET = set(LANGUAGE_OPTIONS)
 
 
-def expected_amount(word_count, rate):
-    """PO 金额口径：字数 ÷ 1000 × 单价（词数按字、费率按元/千字），2 位小数。"""
+def expected_amount(word_count, rate, pricing_mode="per_1000", amount=None):
+    """按计价模式计算 PO 金额。"""
+    if pricing_mode == "manual":
+        return round(float(amount or 0), 2)
+    if pricing_mode == "fixed":
+        return round(float(amount if amount is not None else rate or 0), 2)
+    if pricing_mode == "per_hour":
+        return round(float(word_count or 0) * float(rate or 0), 2)
     return round(float(word_count or 0) / 1000 * float(rate or 0), 2)
 
 
@@ -53,7 +62,7 @@ def audit(s, user, action, entity, eid, detail=""):
     s.add(AuditLog(user=user, action=action, entity=entity, entity_id=eid, detail=detail))
 
 
-def validate_language_pair(source_lang, target_lang):
+def validate_language_pair(source_lang, target_lang, allow_same=False):
     if bool(source_lang) != bool(target_lang):
         raise HTTPException(400, "语言对需同时选择源语言和目标语言")
     if not source_lang and not target_lang:
@@ -62,7 +71,7 @@ def validate_language_pair(source_lang, target_lang):
     if source not in LANGUAGE_SET or target not in LANGUAGE_SET:
         opts = "、".join(LANGUAGE_OPTIONS)
         raise HTTPException(400, f"语言不在固定选项中：{opts}")
-    if source == target:
+    if source == target and not allow_same:
         raise HTTPException(400, "源语言和目标语言不能相同")
     return source, target
 
@@ -78,21 +87,180 @@ def prepare_rate_change(s, tid, payload):
     return data
 
 
-def prepare_po(s, payload, check_duplicate=True):
+def prepare_project_experience(s, tid, payload):
+    get_translator(s, tid)
     data = normalize_payload(dict(payload))
-    get_translator(s, data["translator_id"])
-    if (check_duplicate and data.get("po_number")
-            and s.scalar(select(PO).where(PO.po_number == data["po_number"]))):
-        raise HTTPException(400, "PO 号已存在")
     source_lang, target_lang = validate_language_pair(
         data.get("source_lang"), data.get("target_lang"),
+        allow_same=data.get("role") in {"LQA", "LQE"},
     )
     data["source_lang"] = source_lang
     data["target_lang"] = target_lang
-    if data.get("rate") is None and source_lang and target_lang:
-        language_pair = find_language_pair(s, data["translator_id"], source_lang, target_lang)
-        data["rate"] = rate_for_role(language_pair, data.get("role"))
+    return data
+
+
+def _po_price_payload(price):
+    unit = price.unit
+    if price.price_type == "fixed" or unit in {"project", "task"}:
+        return {"pricing_mode": "fixed", "amount": float(price.amount), "rate": None}
+    if unit == "hour":
+        return {"pricing_mode": "per_hour", "rate": float(price.amount), "amount": None}
+    if unit == "word":
+        return {
+            "pricing_mode": "per_1000",
+            "rate": round(float(price.amount) * 1000, 6),
+            "amount": None,
+        }
+    if unit == "per_1000":
+        return {"pricing_mode": "per_1000", "rate": float(price.amount), "amount": None}
+    return {"pricing_mode": "manual", "amount": float(price.amount), "rate": None}
+
+
+def match_po_price(
+    s,
+    translator_id,
+    project=None,
+    role=None,
+    source_lang=None,
+    target_lang=None,
+    currency=None,
+):
+    project_name = str(project or "").strip()
+    currency_code = str(currency or "").strip().upper()
+    candidates = s.scalars(
+        select(ProjectPrice)
+        .where(ProjectPrice.translator_id == translator_id)
+        .order_by(ProjectPrice.id.desc())
+    ).all()
+    matches = []
+    for price in candidates:
+        if project_name and price.project_name.casefold() != project_name.casefold():
+            continue
+        if currency_code and price.currency != currency_code:
+            continue
+        if role == "一口价" and price.price_type != "fixed":
+            continue
+        if role == "其他" and price.price_type != "custom":
+            continue
+        if role not in {None, "", "一口价", "其他"} and price.task_type != role:
+            continue
+        language_score = 0
+        if source_lang and target_lang:
+            if price.source_lang == source_lang and price.target_lang == target_lang:
+                language_score = 2
+            elif not price.source_lang and not price.target_lang:
+                language_score = 1
+            else:
+                continue
+        elif price.source_lang or price.target_lang:
+            continue
+        matches.append((language_score, price.id, price))
+    if matches:
+        price = max(matches, key=lambda item: (item[0], item[1]))[2]
+        return {
+            "matched": True,
+            "source": "project_price",
+            "project_price_id": price.id,
+            "currency": price.currency,
+            "unit": price.unit,
+            **_po_price_payload(price),
+        }
+    if source_lang and target_lang:
+        language_pair = find_language_pair(
+            s, translator_id, source_lang, target_lang,
+        )
+        rate = rate_for_role(language_pair, role)
+        if rate is not None:
+            return {
+                "matched": True,
+                "source": "language_pair",
+                "language_pair_id": language_pair.id,
+                "currency": language_pair.currency or currency_code or "CNY",
+                "pricing_mode": "per_hour" if role in {"LQA", "LQE"} else "per_1000",
+                "rate": float(rate),
+                "amount": None,
+            }
+    return {"matched": False}
+
+
+def prepare_po(s, payload, check_duplicate=True, exclude_po_id=None):
+    data = normalize_payload(dict(payload))
+    get_translator(s, data["translator_id"])
+    if check_duplicate and data.get("po_number"):
+        query = select(PO.id).where(PO.po_number == data["po_number"])
+        if exclude_po_id is not None:
+            query = query.where(PO.id != exclude_po_id)
+        if s.scalar(query):
+            raise HTTPException(400, "PO 号已存在")
+    if check_duplicate and data.get("source_key"):
+        query = select(PO.id).where(PO.source_key == data["source_key"])
+        if exclude_po_id is not None:
+            query = query.where(PO.id != exclude_po_id)
+        if s.scalar(query):
+            raise HTTPException(400, "来源行已导入")
+    source_lang, target_lang = validate_language_pair(
+        data.get("source_lang"), data.get("target_lang"),
+        allow_same=data.get("role") in {"LQA", "LQE"},
+    )
+    data["source_lang"] = source_lang
+    data["target_lang"] = target_lang
+    if data.get("rate") is None and data.get("amount") is None:
+        matched = match_po_price(
+            s,
+            data["translator_id"],
+            data.get("project"),
+            data.get("role"),
+            source_lang,
+            target_lang,
+            data.get("currency"),
+        )
+        if matched["matched"]:
+            for key in ("pricing_mode", "rate", "amount", "currency"):
+                if key in matched:
+                    data[key] = matched[key]
     return normalize_payload(data)
+
+
+def svc_add_project_experience(s, tid, payload, who):
+    data = prepare_project_experience(s, tid, payload)
+    translator = get_translator(s, tid)
+    experience = TranslatorProjectExperience(translator_id=tid, **data)
+    s.add(experience)
+    s.flush()
+    audit(
+        s, who, "新增", "项目经历", experience.id,
+        f"{translator.name} {experience.project_name}",
+    )
+    return experience
+
+
+def get_project_experience(s, tid, experience_id):
+    translator = get_translator(s, tid)
+    experience = s.get(TranslatorProjectExperience, experience_id)
+    if not experience or experience.translator_id != tid:
+        raise HTTPException(404, "项目经历不存在")
+    return translator, experience
+
+
+def svc_update_project_experience(s, tid, experience_id, payload, who):
+    data = prepare_project_experience(s, tid, payload)
+    translator, experience = get_project_experience(s, tid, experience_id)
+    for key, value in data.items():
+        setattr(experience, key, value)
+    audit(
+        s, who, "编辑", "项目经历", experience.id,
+        f"{translator.name} {experience.project_name}",
+    )
+    return experience
+
+
+def svc_delete_project_experience(s, tid, experience_id, who):
+    translator, experience = get_project_experience(s, tid, experience_id)
+    audit(
+        s, who, "删除", "项目经历", experience.id,
+        f"{translator.name} {experience.project_name}",
+    )
+    s.delete(experience)
 
 
 def prepare_po_status(s, pid, status):
@@ -134,17 +302,52 @@ def rate_for_role(lp, role):
     return getattr(lp, field) if lp and field else None
 
 
+def quality_rating(score):
+    if score is None:
+        return None
+    value = float(score)
+    if value >= 95:
+        return "S"
+    if value >= 90:
+        return "A"
+    if value >= 85:
+        return "A-"
+    if value >= 80:
+        return "B"
+    if value >= 60:
+        return "C"
+    return "D"
+
+
+def resync_quality_summary(s, tid):
+    t = s.get(Translator, tid)
+    if not t:
+        return
+    qs = s.scalars(
+        select(QualityScore)
+        .where(QualityScore.translator_id == tid)
+        .order_by(QualityScore.id)
+    ).all()
+    scored = [
+        float(q.score)
+        for q in qs
+        if q.score is not None and (q.qa_type or "").strip().upper() == "LQE"
+    ]
+    t.recent_qa_score = scored[-1] if scored else None
+    t.cumulative_qa_score = (
+        round(sum(scored) / len(scored), 2) if scored else None
+    )
+    t.internal_rating = t.manual_rating or quality_rating(t.cumulative_qa_score)
+    t.low_error_count = sum(q.minor_errors or 0 for q in qs)
+
+
 def resync_translator(s, tid):
     """按 PRD §6.3.3/§10.3.2/§12.3.2 从子记录全量重算主表派生字段（幂等，子记录变更后调用）。"""
     t = s.get(Translator, tid)
     if not t:
         return
-    # 质量 §6.3.3：最近分 / 累计均分 / 低错累计
-    qs = s.scalars(select(QualityScore).where(QualityScore.translator_id == tid).order_by(QualityScore.id)).all()
-    scored = [float(q.score) for q in qs if q.score is not None]
-    t.recent_qa_score = scored[-1] if scored else None
-    t.cumulative_qa_score = round(sum(scored) / len(scored), 2) if scored else None
-    t.low_error_count = sum(q.minor_errors or 0 for q in qs)
+    # 质量 §6.3.3：最近分 / 累计均分 / 自动评级 / 低错累计
+    resync_quality_summary(s, tid)
     # PO 派生：累计完成字数 / 累计未付
     pos = s.scalars(select(PO).where(PO.translator_id == tid)).all()
     t.cumulative_word_count = int(sum(float(p.word_count or 0) for p in pos))
@@ -178,6 +381,52 @@ def resync_translator(s, tid):
         t.negotiation_status = "未启动"
 
 
+def availability_snapshot(translator, projects, today=None):
+    """按当前项目量和固定 20 个工作日计算月度产能，不覆盖人工档期。"""
+    total_load = 0.0
+    basis = []
+    daily_capacity = float(translator.daily_output or DEFAULT_DAILY_OUTPUT)
+    monthly_capacity = daily_capacity * MONTHLY_WORK_DAYS
+    for project in projects:
+        if project.project_status != "current":
+            continue
+        if project.remaining_volume is None:
+            continue
+        role = project.role or "翻译"
+        remaining = float(project.remaining_volume)
+        load_pct = remaining / max(1.0, monthly_capacity) * 100
+        total_load += load_pct
+        basis.append({
+            "project_id": project.id,
+            "project_name": project.project_name,
+            "role": role,
+            "remaining_volume": remaining,
+            "deadline": project.deadline,
+            "work_days": MONTHLY_WORK_DAYS,
+            "daily_capacity": daily_capacity,
+            "monthly_capacity": monthly_capacity,
+            "load_pct": round(load_pct, 2),
+        })
+    computed = None
+    if basis:
+        if total_load < 50:
+            computed = "空闲"
+        elif total_load < 80:
+            computed = "健康"
+        elif total_load <= 100:
+            computed = "饱和"
+        else:
+            computed = "警告"
+    return {
+        "computed_availability": computed,
+        "computed_load_pct": round(total_load, 2) if basis else None,
+        "availability_conflict": bool(
+            computed and translator.availability and computed != translator.availability
+        ),
+        "availability_basis": basis,
+    }
+
+
 def svc_add_rate_change(s, tid, d, who):
     """记一笔调价；带语言对时更新该语言对费率，否则保留旧的主表同步口径。"""
     d = prepare_rate_change(s, tid, d)
@@ -206,16 +455,53 @@ def svc_add_rate_change(s, tid, d, who):
 def svc_create_po(s, d, who):
     d = prepare_po(s, d)
     source_lang, target_lang = d.get("source_lang"), d.get("target_lang")
-    amt = expected_amount(d.get("word_count"), d.get("rate"))
+    pricing_mode = d.get("pricing_mode") or "per_1000"
+    amt = expected_amount(
+        d.get("word_count"), d.get("rate"), pricing_mode, d.get("amount"),
+    )
     p = PO(translator_id=d["translator_id"], settlement_month=d["settlement_month"], project=d.get("project"),
            source_lang=source_lang, target_lang=target_lang, role=d.get("role"),
            word_count=d.get("word_count"), rate=d.get("rate"), amount=amt,
            currency=d.get("currency", "CNY"), status=d.get("status", "未开票"),
-           po_number=d.get("po_number"), remarks=d.get("remarks"))
+           po_number=d.get("po_number"), pricing_mode=pricing_mode,
+           source_key=d.get("source_key"), source_name=d.get("source_name"),
+           source_row=d.get("source_row"), remarks=d.get("remarks"))
     s.add(p)
     s.flush()
     audit(s, who, "新增", "PO", p.id, f"{d['settlement_month']} {amt}")
     resync_translator(s, p.translator_id)
+    return p
+
+
+def svc_update_po(s, pid, d, who):
+    p = s.get(PO, pid)
+    if not p:
+        raise HTTPException(404, "PO 不存在")
+    data = dict(d)
+    for key in ("source_key", "source_name", "source_row"):
+        if not data.get(key):
+            data[key] = getattr(p, key)
+    prepared = prepare_po(s, data, exclude_po_id=pid)
+    old_translator_id = p.translator_id
+    pricing_mode = prepared.get("pricing_mode") or "per_1000"
+    amount = expected_amount(
+        prepared.get("word_count"),
+        prepared.get("rate"),
+        pricing_mode,
+        prepared.get("amount"),
+    )
+    for key in (
+        "translator_id", "settlement_month", "project", "source_lang",
+        "target_lang", "role", "word_count", "rate", "currency", "status",
+        "po_number", "pricing_mode", "source_key", "source_name", "source_row",
+        "remarks",
+    ):
+        setattr(p, key, prepared.get(key))
+    p.amount = amount
+    audit(s, who, "人工修正", "PO", pid, f"{p.settlement_month} {amount}")
+    resync_translator(s, old_translator_id)
+    if p.translator_id != old_translator_id:
+        resync_translator(s, p.translator_id)
     return p
 
 

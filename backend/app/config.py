@@ -6,6 +6,8 @@ APP_DIR = Path(__file__).resolve().parent       # backend/app
 BASE_DIR = APP_DIR.parent                         # backend
 PROJECT_DIR = BASE_DIR.parent                     # 译员管理系统
 FRONTEND_DIR = PROJECT_DIR / "frontend"
+UPLOAD_DIR = Path(os.getenv("UPLOAD_DIR", BASE_DIR / "uploads")).resolve()
+UPLOAD_MAX_BYTES = int(os.getenv("UPLOAD_MAX_BYTES", 100 * 1024 * 1024))
 
 # 上线用环境变量；不设则用本地默认（仅开发）
 DB_URL = os.getenv("DB_URL", f"sqlite:///{BASE_DIR / 'app.db'}")

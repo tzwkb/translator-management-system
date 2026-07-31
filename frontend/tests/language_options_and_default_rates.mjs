@@ -9,7 +9,7 @@ const languageLine = services.match(/LANGUAGE_OPTIONS = \[(.*?)\]/s)?.[1] || "";
 const languages = [...languageLine.matchAll(/"([^"]+)"/g)].map((m) => m[1]);
 
 assert.ok(languages.length >= 80, `expected at least 80 languages, got ${languages.length}`);
-for (const code of ["ZH", "ZH-HANS", "ZH-HANT", "EN", "EN-US", "EN-GB", "JA", "KO", "FR", "FR-CA", "DE", "ES", "ES-LA", "PT-BR", "RU", "TH", "VI", "ID", "AR", "TR", "UK", "HI", "HE", "FA", "SW"]) {
+for (const code of ["ZH", "ZH-HANS", "ZH-HANT", "EN", "EN-US", "EN-GB", "JA", "KO", "BO", "FR", "FR-CA", "DE", "ES", "ES-LA", "PT-BR", "RU", "TH", "VI", "ID", "AR", "TR", "UK", "HI", "HE", "FA", "SW"]) {
   assert.ok(languages.includes(code), `${code} should be selectable`);
 }
 

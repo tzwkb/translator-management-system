@@ -121,6 +121,25 @@
   .statussel { padding:3px 6px; border:1px solid var(--line); border-radius:5px; font-size:12px; background:#fff; }
   .secbox { background:#fff; border:1px solid var(--line); border-radius:8px; padding:14px 16px; }
   .secbox .kv { font-size:13px; margin-bottom:6px; } .secbox .kv b { color:var(--muted); font-weight:500; margin-right:6px; }
+  .table-scroll { overflow-x:auto; border-radius:8px; }
+  .project-cell { min-width:150px; white-space:normal; }
+  .project-tags { display:flex; flex-direction:column; gap:4px; align-items:flex-start; }
+  .project-tag { display:inline-flex; align-items:center; gap:4px; padding:2px 7px; border-radius:5px; background:#f1f6fa; color:#41484f; font-size:12px; }
+  .project-tag b { font-weight:600; }
+  .project-ledger { display:grid; gap:14px; }
+  .project-block { background:#fff; border:1px solid var(--line); border-radius:8px; overflow:hidden; }
+  .project-block.current { border-left:3px solid var(--green); }
+  .project-block.past { border-left:3px solid var(--blue); }
+  .project-block-head { min-height:42px; padding:8px 12px; display:flex; align-items:center; gap:8px; background:#fbfdff; border-bottom:1px solid var(--line); }
+  .project-block-head h3 { margin:0; font-size:13px; }
+  .project-block-head .count { margin-right:auto; }
+  .project-block .mini { margin:0; border:0; border-radius:0; }
+  .project-editor { margin-top:14px; background:#fff; border:1px solid var(--line); border-radius:8px; overflow:hidden; }
+  .project-editor h3 { margin:0; padding:10px 14px; background:var(--slate); border-bottom:1px solid var(--line); font-size:14px; }
+  .project-form { padding:14px; display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:11px 12px; }
+  .project-form .span-2 { grid-column:span 2; }
+  .project-form .full { grid-column:1/-1; }
+  .project-form-actions { display:flex; justify-content:flex-end; gap:8px; padding:0 14px 14px; }
   body:not(.viewer) .po-status-read { display:none !important; }
   body.viewer .edit-only { display:none !important; }
   .toast-wrap { position: fixed; top: 16px; right: 16px; z-index: 9999; display: flex; flex-direction: column; gap: 8px; }
@@ -131,6 +150,14 @@
   .toast.info { background: var(--ink, #2c3e50); }
   .grouphd { grid-column:1/-1; width:100%; font-weight:600; color:var(--green-d,#2e7d32); margin:10px 0 2px; border-top:1px solid var(--line,#eee); padding-top:8px; font-size:13px; }
   .kv-sec { grid-column:1/-1; flex-basis:100%; width:100%; font-size:12px; color:var(--muted,#888); margin-top:8px; border-top:1px dashed var(--line,#ddd); padding-top:6px; }
+  .filter-panel { background:#fff; border:1px solid var(--line); border-radius:9px; padding:10px 12px; margin-bottom:14px; }
+  .filter-panel summary { cursor:pointer; font-weight:600; color:var(--green-d); }
+  .filter-grid { display:grid; grid-template-columns:repeat(6,minmax(110px,1fr)); gap:9px; margin-top:11px; }
+  .filter-grid .field input,.filter-grid .field select { width:100%; }
+  .filter-actions { display:flex; gap:8px; align-items:end; }
+  .stat-note { font-size:12px; line-height:1.55; max-width:280px; }
+  .conflict { color:var(--danger); font-weight:600; }
+  .file-name { max-width:220px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
   @media (max-width:760px) {
     .profile-head { display:block; }
     .profile-meta { margin-top:8px; }
@@ -140,6 +167,13 @@
     .detail-kv:nth-child(-n+2) { border-top:1px solid #edf2f6; }
     .detail-kv:first-child { border-top:none; }
     .rate-line { grid-template-columns:1fr; gap:5px; }
+    .project-form { grid-template-columns:1fr 1fr; }
+    .project-form .span-2,.project-form .full { grid-column:1/-1; }
+    .filter-grid { grid-template-columns:repeat(2,minmax(0,1fr)); }
+  }
+  @media (max-width:520px) {
+    .project-form { grid-template-columns:1fr; }
+    .project-form .span-2,.project-form .full { grid-column:1; }
   }
 </style>
 </head>
@@ -173,32 +207,79 @@
       <input class="search" id="search" placeholder="搜索姓名 / 语言对 / 项目">
       <span class="count" id="count"></span>
       <button class="btn-ghost" onclick="exportTr()">导出 Excel</button>
+      <button class="btn-ghost" onclick="exportFiltered()">导出筛选结果</button>
       <label class="btn-ghost edit-only" style="display:inline-block">导入 Excel<input type="file" accept=".xlsx" style="display:none" onchange="importTr(this)"></label>
       <label class="btn-ghost edit-only" style="display:inline-block">导入 LQE 报告<input type="file" accept=".xlsx" style="display:none" onchange="importLQE(this)"></label>
       <button class="btn-primary edit-only" onclick="openEdit()">+ 新增译员</button>
     </div>
-    <table><thead><tr>
-      <th>姓名</th><th>语言对</th><th>状态</th><th>评级</th><th>当前项目</th><th>档期</th><th>合同到期</th><th>最近联系</th><th>操作</th>
-    </tr></thead><tbody id="rows"></tbody></table>
+    <details class="filter-panel">
+      <summary>精确组合筛选（全部条件同时满足）</summary>
+      <div class="filter-grid">
+        <div class="field"><label>源语言</label><input id="fs-source" placeholder="ZH"></div>
+        <div class="field"><label>目标语言</label><input id="fs-target" placeholder="EN"></div>
+        <div class="field"><label>母语</label><input id="fs-native" placeholder="English"></div>
+        <div class="field"><label>价格类型</label><select id="fs-rate"><option value="">—</option><option value="translation">翻译</option><option value="mtpe">MTPE</option><option value="review">审校</option><option value="lqa">LQA</option><option value="lqe">LQE</option><option value="fixed">一口价</option><option value="custom">其他</option></select></div>
+        <div class="field"><label>最低价格</label><input id="fs-min" type="number" min="0"></div>
+        <div class="field"><label>最高价格</label><input id="fs-max" type="number" min="0"></div>
+        <div class="field"><label>币种</label><select id="fs-currency"><option value="">—</option><option>CNY</option><option>USD</option><option>EUR</option></select></div>
+        <div class="field"><label>领域标签</label><input id="fs-domain" placeholder="RPG"></div>
+        <div class="field"><label>微信</label><select id="fs-wechat"><option value="">不限</option><option value="true">有微信</option><option value="false">无微信</option></select></div>
+        <div class="field"><label>评级</label><select id="fs-rating"><option value="">不限</option><option>S</option><option>A</option><option>A-</option><option>B</option><option>C</option><option>D</option></select></div>
+        <div class="field"><label>性别</label><select id="fs-gender"><option value="">不限</option><option value="male">男</option><option value="female">女</option></select></div>
+        <div class="field"><label>主体</label><select id="fs-entity"><option value="">不限</option><option value="individual">个人译员</option><option value="vendor">供应商</option></select></div>
+        <div class="field"><label>计算档期</label><select id="fs-availability"><option value="">不限</option><option>空闲</option><option>健康</option><option>饱和</option><option>警告</option></select></div>
+        <div class="field full"><label>任意业务字段</label><div class="addrow">
+          <select id="fs-any-field" style="min-width:180px"></select>
+          <select id="fs-any-op"><option value="contains">包含</option><option value="eq">等于</option><option value="in">属于列表</option><option value="gte">大于等于</option><option value="lte">小于等于</option><option value="between">区间</option><option value="empty">为空</option><option value="not_empty">非空</option></select>
+          <input id="fs-any-value" placeholder="区间填写：最小值,最大值" style="min-width:180px">
+          <button class="btn-ghost" type="button" onclick="addGenericFilter()">添加条件</button>
+        </div><div id="fs-any-list" class="muted" style="margin-top:6px">尚未添加字段条件</div></div>
+        <div class="filter-actions"><button class="btn-primary" onclick="applyPreciseFilters()">筛选</button><button class="btn-ghost" onclick="resetPreciseFilters()">清空</button></div>
+      </div>
+    </details>
+    <div class="table-scroll"><table><thead><tr>
+      <th>姓名</th><th>主体</th><th>性别</th><th>语言对</th><th>状态</th><th>评级</th><th>当前项目</th><th>档期</th><th>合同到期</th><th>最近联系</th><th>操作</th>
+    </tr></thead><tbody id="rows"></tbody></table></div>
     <div class="empty" id="empty" style="display:none">没有匹配的译员</div>
   </section>
 
   <section id="view-po" style="display:none">
     <div class="cards" id="poCards"></div>
     <div class="toolbar">
-      <select id="poMonth" onchange="loadPO()"></select>
-      <select id="poStatus" onchange="loadPO()">
-        <option value="">全部状态</option><option>未开票</option><option>已开票待付</option><option>已支付</option><option>有争议</option>
-      </select>
       <span class="count" id="poCount"></span>
       <span class="count" id="poImportResult"></span>
-      <label class="btn-ghost edit-only" style="display:inline-block">导入 PO Excel<input id="poImportFile" type="file" accept=".xlsx" style="display:none" onchange="importPOFile(this)"></label>
+      <label class="btn-ghost edit-only" style="display:inline-block">导入标准 PO Excel<input id="poImportFile" type="file" accept=".xlsx" style="display:none" onchange="importPOFile(this)"></label>
+      <select id="projectlistPOState" class="edit-only" title="Projectlist 结算PO状态">
+        <option value="all">Projectlist：全部</option>
+        <option value="unchecked">Projectlist：未勾选</option>
+        <option value="checked">Projectlist：已勾选</option>
+      </select>
+      <label class="btn-ghost edit-only" style="display:inline-block" title="仅核对译员映射和结算PO状态；数量规则未确认，不会写入">只读预览 Projectlist<input id="projectlistPreviewFile" type="file" accept=".xlsx" style="display:none" onchange="previewProjectlistFile(this)"></label>
       <button class="btn-primary edit-only" onclick="openPO()">+ 新增 PO</button>
     </div>
+    <details class="filter-panel" open>
+      <summary>PO 组合筛选（全部条件同时满足）</summary>
+      <div class="filter-grid">
+        <div class="field"><label>结算月份</label><select id="poMonth"></select></div>
+        <div class="field"><label>译员</label><input id="poTranslator" placeholder="姓名关键字"></div>
+        <div class="field"><label>项目</label><input id="poProject" placeholder="项目关键字"></div>
+        <div class="field"><label>状态</label><select id="poStatus"><option value="">全部状态</option><option>未开票</option><option>已开票待付</option><option>已支付</option><option>有争议</option></select></div>
+        <div class="field"><label>工作类型</label><input id="poRole" placeholder="翻译 / LQA / 一口价"></div>
+        <div class="field"><label>源语言</label><input id="poSourceLang" placeholder="ZH"></div>
+        <div class="field"><label>目标语言</label><input id="poTargetLang" placeholder="EN"></div>
+        <div class="field"><label>币种</label><select id="poCurrency"><option value="">全部币种</option><option>CNY</option><option>USD</option><option>EUR</option></select></div>
+        <div class="field"><label>计价模式</label><select id="poPricingMode"><option value="">全部</option><option value="per_1000">按千字</option><option value="per_hour">按小时</option><option value="fixed">一口价</option><option value="manual">手工</option></select></div>
+        <div class="field"><label>结算策略</label><select id="poSettlementMode"><option value="">全部</option><option value="monthly">月结</option><option value="cumulative">累计结</option></select></div>
+        <div class="field"><label>最低金额</label><input id="poMinAmount" type="number" min="0"></div>
+        <div class="field"><label>最高金额</label><input id="poMaxAmount" type="number" min="0"></div>
+        <div class="field"><label>PO 编号</label><input id="poNumber" placeholder="PO 编号关键字"></div>
+        <div class="filter-actions"><button class="btn-primary" onclick="applyPOFilters()">筛选</button><button class="btn-ghost" onclick="resetPOFilters()">清空</button></div>
+      </div>
+    </details>
     <table><thead><tr>
-      <th>译员</th><th>结算月</th><th>项目</th><th>语言对</th><th>角色</th><th>字数（字）</th><th>单价（/千字）</th><th>金额</th><th>币种</th><th>状态</th><th>PO 号</th>
+      <th>译员</th><th>结算月</th><th>项目</th><th>语言对</th><th>角色</th><th>计价</th><th>数量</th><th>单价</th><th>金额</th><th>币种</th><th>状态</th><th>PO 号</th><th>操作</th>
     </tr></thead><tbody id="poRows"></tbody></table>
-    <div class="empty" id="poEmpty" style="display:none">本月没有结算记录</div>
+    <div class="empty" id="poEmpty" style="display:none">没有匹配的结算记录</div>
   </section>
 
   <section id="view-audit" style="display:none">
@@ -219,6 +300,8 @@
   <div class="form">
     <input type="hidden" id="f-id">
     <input type="hidden" id="f-language_pairs">
+    <input type="hidden" id="f-current_project">
+    <input type="hidden" id="f-role">
     <div class="grouphd">基础信息</div>
     <div class="field"><label>姓名 <span class="req">*</span></label><input id="f-name"></div>
     <div class="field"><label>母语 <span class="req">*</span></label><input id="f-native_language" placeholder="中文"></div>
@@ -229,22 +312,25 @@
     <div class="field"><label>时区</label><input id="f-timezone" placeholder="UTC+8"></div>
     <div class="field"><label>状态</label><select id="f-status"><option>Active</option><option>Dormant</option><option>Blacklisted</option><option>Probation</option></select></div>
     <div class="field"><label>来源</label><input id="f-source"></div>
+    <div class="field"><label>主体类型</label><select id="f-entity_type"><option value="">—</option><option value="individual">个人译员</option><option value="vendor">供应商</option></select></div>
+    <div class="field"><label>性别 <span class="req">*</span></label><select id="f-gender"><option value="male">男</option><option value="female">女</option></select></div>
     <div class="grouphd">专业能力</div>
     <div class="field full" id="editLangPairBlock"><label>语言对与费率</label><div id="editLangPairBody"></div></div>
     <div class="field"><label>擅长领域</label><input id="f-domains" placeholder="RPG,SLG"></div>
     <div class="field"><label>文本类型</label><input id="f-text_types" placeholder="UI,剧情"></div>
     <div class="field"><label>CAT 工具</label><input id="f-cat_tools" placeholder="Trados,memoQ"></div>
-    <div class="field"><label>内部评级</label><select id="f-internal_rating"><option value="">—</option><option>S</option><option>A</option><option>B</option><option>C</option><option>D</option></select></div>
+    <div class="field"><label>质量等级（LQE 均分/人工）</label><input id="f-internal_rating" disabled placeholder="未评级"></div>
+    <div class="field"><label>人工例外评级</label><select id="f-manual_rating"><option value="">不覆盖</option><option>S</option><option>A</option><option>A-</option><option>B</option><option>C</option><option>D</option></select></div>
+    <div class="field"><label>人工评级原因</label><input id="f-manual_rating_reason"></div>
     <div class="field"><label>试译结果</label><select id="f-trial_result"><option value="">—</option><option>Pass</option><option>Fail</option><option>Pending</option></select></div>
-    <div class="grouphd">项目分配</div>
-    <div class="field"><label>当前项目</label><input id="f-current_project"></div>
-    <div class="field"><label>角色</label><select id="f-role"><option value="">—</option><option>翻译</option><option>审校</option><option>MTPE</option><option>LQA</option></select></div>
-    <div class="field"><label>日产字数</label><input id="f-daily_output" type="number" min="0" step="100"></div>
+    <div class="grouphd">工作安排</div>
+    <div class="field"><label>翻译日产字数</label><input id="f-daily_output" type="number" min="0" step="100" placeholder="未填按 2000"></div>
     <div class="field"><label>是否双休</label><select id="f-weekend_off"><option value="">—</option><option value="true">是</option><option value="false">否</option></select></div>
-    <div class="field"><label>档期</label><select id="f-availability"><option value="">—</option><option>空闲</option><option>部分空闲</option><option>满负荷</option></select></div>
+    <div class="field"><label>人工产能状态</label><select id="f-availability"><option value="">—</option><option>空闲</option><option>健康</option><option>饱和</option><option>警告</option></select></div>
     <div class="grouphd">财务信息</div>
     <div class="field"><label>结算币种</label><select id="f-currency"><option value="">—</option><option>CNY</option><option>USD</option><option>EUR</option></select></div>
     <div class="field"><label>支付方式</label><input id="f-payment_method" placeholder="银行转账/PayPal"></div>
+    <div class="field"><label>结算策略</label><select id="f-settlement_mode"><option value="monthly">月结</option><option value="cumulative">累计结</option></select></div>
     <div class="field"><label>开票类型</label><input id="f-invoice_type"></div>
     <div class="field"><label>扣税方式</label><input id="f-tax_deduction"></div>
     <div class="field"><label>合同状态</label><select id="f-contract_status"><option value="">—</option><option>有效</option><option>即将到期</option><option>已过期</option><option>无合同</option></select></div>
@@ -271,32 +357,41 @@
 </div></div>
 
 <!-- 新增 PO -->
-<div class="mask" id="poMask"><div class="modal"><h2>新增 PO 结算行</h2><button class="modal-close" type="button" onclick="closeModal('poMask')" aria-label="关闭弹窗" title="关闭">×</button>
+<div class="mask" id="poMask"><div class="modal"><h2 id="poModalTitle">新增 PO 结算行</h2><button class="modal-close" type="button" onclick="closeModal('poMask')" aria-label="关闭弹窗" title="关闭">×</button>
   <div class="form">
+    <input id="p-id" type="hidden">
     <div class="field"><label>译员 <span class="req">*</span></label><select id="p-translator_id" onchange="fillPORate()"></select></div>
     <div class="field"><label>结算月 <span class="req">*</span></label><input id="p-settlement_month" type="month"></div>
-    <div class="field"><label>项目</label><input id="p-project"></div>
+    <div class="field"><label>项目</label><input id="p-project" onchange="fillPORate()" onblur="fillPORate()"></div>
     <div class="field"><label>源语言</label><div class="lang-combo"><input id="p-source_lang" class="lang-input" placeholder="不指定" autocomplete="off" onfocus="openLangMenu(this)" oninput="fillPORate();openLangMenu(this)" onchange="fillPORate()" onkeydown="langKeydown(event)"><button class="lang-trigger" type="button" onclick="toggleLangMenu('p-source_lang')" aria-label="展开源语言列表">▼</button><div id="p-source_lang-menu" class="lang-menu" role="listbox"></div></div></div>
     <div class="field"><label>目标语言</label><div class="lang-combo"><input id="p-target_lang" class="lang-input" placeholder="不指定" autocomplete="off" onfocus="openLangMenu(this)" oninput="fillPORate();openLangMenu(this)" onchange="fillPORate()" onkeydown="langKeydown(event)"><button class="lang-trigger" type="button" onclick="toggleLangMenu('p-target_lang')" aria-label="展开目标语言列表">▼</button><div id="p-target_lang-menu" class="lang-menu" role="listbox"></div></div></div>
-    <div class="field"><label>角色</label><select id="p-role" onchange="fillPORate()"><option>翻译</option><option>审校</option><option>MTPE</option><option>LQA</option><option>LQE</option><option>其他</option></select></div>
-    <div class="field"><label>字数（字）</label><input id="p-word_count" type="number" min="0" step="1"></div>
-    <div class="field"><label>单价（/千字）</label><input id="p-rate" type="number" min="0" step="1"></div>
-    <div class="field"><label>币种</label><select id="p-currency"><option>CNY</option><option>USD</option><option>EUR</option></select></div>
+    <div class="field"><label>角色</label><select id="p-role" onchange="fillPORate();updatePOPricing()"><option>翻译</option><option>审校</option><option>MTPE</option><option>LQA</option><option>LQE</option><option>一口价</option><option>其他</option></select></div>
+    <div class="field"><label>计价模式</label><select id="p-pricing_mode" onchange="updatePOPricing()"><option value="per_1000">按千字</option><option value="per_hour">按小时</option><option value="fixed">一口价</option><option value="manual">手工金额</option></select></div>
+    <div class="field"><label id="p-quantity-label">字数（字）</label><input id="p-word_count" type="number" min="0" step="1"></div>
+    <div class="field"><label id="p-rate-label">单价（/千字）</label><input id="p-rate" type="number" min="0" step="0.001"></div>
+    <div class="field"><label>固定/手工金额</label><input id="p-amount" type="number" min="0" step="0.01"></div>
+    <div class="field"><label>币种</label><select id="p-currency" onchange="fillPORate()"><option>CNY</option><option>USD</option><option>EUR</option></select></div>
     <div class="field"><label>状态</label><select id="p-status"><option>未开票</option><option>已开票待付</option><option>已支付</option><option>有争议</option></select></div>
     <div class="field"><label>PO 号</label><input id="p-po_number"></div>
     <div class="field"><label>备注</label><input id="p-remarks"></div>
-    <div class="field full muted" style="font-size:12px">金额 = 字数（字）÷ 1000 × 单价（/千字）；单价留空时按语言对和角色取价。</div>
+    <div class="field full muted" id="p-pricing-hint" style="font-size:12px">金额 = 字数（字）÷ 1000 × 单价（/千字）；单价留空时按语言对和角色取价。</div>
   </div>
   <div class="actions"><button class="btn-ghost" onclick="closeModal('poMask')">取消</button><button class="btn-primary" onclick="savePO()">保存</button></div>
 </div></div>
 
+<div class="mask" id="unpaidMask"><div class="modal wide"><h2 id="unpaidTitle">未结算明细</h2><button class="modal-close" type="button" onclick="closeModal('unpaidMask')" aria-label="关闭弹窗" title="关闭">×</button>
+  <div id="unpaidSummary" class="summary"></div>
+  <div id="unpaidBody"></div>
+  <div class="actions"><button class="btn-ghost" onclick="closeModal('unpaidMask')">关闭</button></div>
+</div></div>
+
 <script>
-const TRF = ["name","native_language","onboarding_date","email","wechat","location","timezone","status","source",
-  "language_pairs","domains","text_types","cat_tools","internal_rating","trial_result",
+const TRF = ["name","native_language","onboarding_date","email","wechat","location","timezone","status","source","gender","entity_type",
+  "language_pairs","domains","text_types","cat_tools","internal_rating","manual_rating","manual_rating_reason","trial_result",
   "current_project","role","daily_output","weekend_off","availability",
-  "currency","payment_method","invoice_type","tax_deduction","contract_status","contract_expiry","nda_signed",
+  "currency","payment_method","settlement_mode","invoice_type","tax_deduction","contract_status","contract_expiry","nda_signed",
   "punctuality_rate","responsiveness","cooperation_rating","last_contact","remarks"];
-let DATA=[], PAIR_OPTIONS=[], LANG_OPTIONS=[], CUR=null, TOKEN="", ROLE="editor";
+let DATA=[], PO_ROWS=[], PAIR_OPTIONS=[], LANG_OPTIONS=[], FILTER_FIELDS=[], GENERIC_FILTERS=[], CUR=null, TOKEN="", ROLE="editor", FILTER_QUERY="", PO_IMPORT_FILE=null;
 
 /* ---- 鉴权 ---- */
 async function switchRole() {
@@ -331,6 +426,21 @@ async function api(method, path, body) {
   const ct = r.headers.get("content-type") || "";
   return ct.includes("json") ? r.json() : r;
 }
+async function apiForm(method, path, formData) {
+  const r = await fetch(path, {method, headers:TOKEN?{"Authorization":"Bearer "+TOKEN}:{}, body:formData});
+  let data = {};
+  try { data = await r.json(); } catch(e) {}
+  if (r.status===403) { showToast("无操作权限", "error"); throw new Error("403"); }
+  if (!r.ok) { showToast("操作失败：" + (data.detail || r.status), "error"); throw new Error(r.status); }
+  return data;
+}
+async function downloadAuth(path, filename) {
+  const r = await fetch(path, {headers:TOKEN?{"Authorization":"Bearer "+TOKEN}:{}});
+  if (!r.ok) { showToast("下载失败", "error"); return; }
+  const blob = await r.blob(), url = URL.createObjectURL(blob), a = document.createElement("a");
+  a.href = url; a.download = filename || "download"; a.click();
+  setTimeout(()=>URL.revokeObjectURL(url), 1000);
+}
 const get = p => fetch(p).then(r => r.json());
 
 /* ---- 标签 ---- */
@@ -346,21 +456,89 @@ function showTab(t) {
 
 /* ---- 译员主表 ---- */
 async function load() {
-  const [ov, list, pairs] = await Promise.all([get("/api/overview"), get("/api/translators"), get("/api/language-pair-options")]);
+  const [ov, list, pairs, filterFields] = await Promise.all([
+    get("/api/overview"),
+    get("/api/translators"+FILTER_QUERY),
+    get("/api/language-pair-options"),
+    FILTER_FIELDS.length ? Promise.resolve(FILTER_FIELDS) : get("/api/translator-filter-fields"),
+  ]);
   DATA = list;
   PAIR_OPTIONS = pairs;
+  FILTER_FIELDS = filterFields;
   LANG_OPTIONS = [...new Set(pairs.flatMap(p => [p.source_lang, p.target_lang]))];
   renderLanguageOptions();
+  renderGenericFilterFields();
+  const nativeStats = Object.entries(ov.native_languages||{}).map(([k,v])=>`${esc(k)} ${v}`).join(" · ") || "—";
+  const pairStats = Object.entries(ov.language_pairs||{}).map(([k,v])=>`${esc(k)} ${v}`).join(" · ") || "—";
   document.getElementById("cards").innerHTML = `
     <div class="card"><div class="n">${ov.total}</div><div class="l">在册译员</div></div>
     <div class="card"><div class="n">${ov.active}</div><div class="l">活跃</div></div>
     <div class="card"><div class="n">${ov.dormant}</div><div class="l">休眠</div></div>
-    <div class="card ${ov.expiring_30d?"alert":""}"><div class="n">${ov.expiring_30d}</div><div class="l">30 天内合同到期</div></div>`;
+    <div class="card ${ov.expiring_30d?"alert":""}"><div class="n">${ov.expiring_30d}</div><div class="l">30 天内合同到期</div></div>
+    ${["S","A","A-","B"].map(r=>`<div class="card"><div class="n">${ov.ratings?.[r]||0}</div><div class="l">${r} 级译员</div></div>`).join("")}
+    <div class="card"><div class="stat-note">${nativeStats}</div><div class="l">母语人数</div></div>
+    <div class="card"><div class="stat-note">${pairStats}</div><div class="l">语言对覆盖</div></div>`;
   render();
+}
+function filterValue(id){ return document.getElementById(id).value.trim(); }
+function renderGenericFilterFields() {
+  const select=document.getElementById("fs-any-field");
+  if(!select||select.options.length)return;
+  select.innerHTML=FILTER_FIELDS.map(item=>`<option value="${esc(item.field)}">${esc(item.label)}</option>`).join("");
+}
+function renderGenericFilters() {
+  const box=document.getElementById("fs-any-list");
+  if(!GENERIC_FILTERS.length){box.textContent="尚未添加字段条件";return;}
+  const opLabels={contains:"包含",eq:"等于",in:"属于",gte:"≥",lte:"≤",between:"区间",empty:"为空",not_empty:"非空"};
+  box.innerHTML=GENERIC_FILTERS.map((item,index)=>{
+    const field=FILTER_FIELDS.find(candidate=>candidate.field===item.field);
+    return `<span class="chip">${esc(field?.label||item.field)} ${opLabels[item.op]||item.op}${["empty","not_empty"].includes(item.op)?"":" "+esc(item.value)} <button class="btn-link danger" type="button" onclick="removeGenericFilter(${index})">×</button></span>`;
+  }).join(" ");
+}
+function addGenericFilter() {
+  const field=filterValue("fs-any-field"),op=filterValue("fs-any-op"),value=filterValue("fs-any-value");
+  if(!field)return;
+  if(!["empty","not_empty"].includes(op)&&!value)return failField("请填写字段筛选值");
+  GENERIC_FILTERS.push({field,op,value:["empty","not_empty"].includes(op)?null:value});
+  document.getElementById("fs-any-value").value="";
+  renderGenericFilters();
+}
+function removeGenericFilter(index){GENERIC_FILTERS.splice(index,1);renderGenericFilters();}
+async function applyPreciseFilters() {
+  const params = new URLSearchParams();
+  [
+    ["source_lang","fs-source"],["target_lang","fs-target"],["native_language","fs-native"],
+    ["rate_type","fs-rate"],["min_rate","fs-min"],["max_rate","fs-max"],
+    ["currency","fs-currency"],["domain","fs-domain"],["has_wechat","fs-wechat"],
+    ["rating","fs-rating"],["gender","fs-gender"],["entity_type","fs-entity"],
+    ["availability","fs-availability"],
+  ].forEach(([key,id])=>{ const value=filterValue(id); if(value) params.set(key,value); });
+  if(GENERIC_FILTERS.length)params.set("filters",JSON.stringify(GENERIC_FILTERS));
+  if ((params.has("min_rate")||params.has("max_rate")) && (!params.has("rate_type")||!params.has("currency"))) {
+    return failField("价格区间必须同时选择价格类型和币种");
+  }
+  FILTER_QUERY = params.toString() ? "?" + params.toString() : "";
+  await load();
+}
+async function resetPreciseFilters() {
+  document.querySelectorAll(".filter-grid input,.filter-grid select").forEach(control=>control.value="");
+  GENERIC_FILTERS=[];
+  renderGenericFilterFields();
+  if(document.getElementById("fs-any-field").options.length)document.getElementById("fs-any-field").selectedIndex=0;
+  document.getElementById("fs-any-op").value="contains";
+  renderGenericFilters();
+  FILTER_QUERY = "";
+  await load();
+}
+function exportFiltered() {
+  const columns = ["name","native_language","language_pairs","internal_rating","domains","wechat","entity_type","gender","computed_availability","computed_load_pct"];
+  const csv = [columns.join(","), ...DATA.map(row=>columns.map(key=>`"${String(row[key]??"").replaceAll('"','""')}"`).join(","))].join("\n");
+  const blob = new Blob(["\ufeff"+csv],{type:"text/csv;charset=utf-8"}), url=URL.createObjectURL(blob), a=document.createElement("a");
+  a.href=url; a.download="translators-filtered.csv"; a.click(); URL.revokeObjectURL(url);
 }
 function render() {
   const q = document.getElementById("search").value.trim().toLowerCase();
-  const rows = DATA.filter(t => !q || [t.name,t.language_pairs,t.current_project].some(v => (v||"").toLowerCase().includes(q)));
+  const rows = DATA.filter(t => !q || [t.name,t.language_pairs,currentProjectText(t)].some(v => (v||"").toLowerCase().includes(q)));
   document.getElementById("count").textContent = "共 " + rows.length + " 名译员";
   document.getElementById("empty").style.display = rows.length ? "none" : "block";
   document.getElementById("rows").innerHTML = rows.map(t => {
@@ -368,17 +546,38 @@ function render() {
     const exp = t.contract_expiry ? `<span class="${w?"expiry-warn":""}">${t.contract_expiry}${w?" ⚠":""}</span>` : m();
     return `<tr>
       <td><button class="namebtn" onclick="openDetail(${t.id})">${esc(t.name)}</button></td>
+      <td>${detailVal(entityTypeZh(t.entity_type))}</td><td>${detailVal(genderZh(t.gender))}</td>
       <td>${esc(t.language_pairs)||m()}</td><td><span class="pill s-${t.status}">${statusZh(t.status)}</span></td>
-      <td>${esc(t.internal_rating)||m()}</td><td>${esc(t.current_project)||m()}</td>
-      <td>${esc(t.availability)||m()}</td><td>${exp}</td><td>${esc(t.last_contact)||m()}</td>
+      <td>${esc(t.internal_rating)||m()}</td><td class="project-cell">${currentProjectHtml(t)}</td>
+      <td>${availabilityHtml(t)}</td><td>${exp}</td><td>${esc(t.last_contact)||m()}</td>
       <td><button class="btn-link edit-only" onclick="openEdit(${t.id})">编辑</button>
           <button class="btn-link danger edit-only" onclick='delTr(${t.id}, ${JSON.stringify(t.name)})'>删除</button></td>
     </tr>`;
   }).join("");
 }
+function availabilityHtml(t) {
+  const value = t.computed_availability || t.availability;
+  if (!value) return m();
+  const load = t.computed_load_pct==null ? "" : ` · ${fmt(t.computed_load_pct)}%`;
+  const conflict = t.availability_conflict ? ` <span class="conflict" title="人工档期：${esc(t.availability)}">⚠冲突</span>` : "";
+  return `${esc(value)}${load}${conflict}`;
+}
 function m(){return "<span class=muted>—</span>";}
 function daysTo(d){ if(!d) return null; const t=new Date(d+"T00:00:00"); if(isNaN(t)) return null; const n=new Date(); n.setHours(0,0,0,0); return Math.round((t-n)/86400000); }
 function statusZh(s){ return {Active:"活跃",Dormant:"休眠",Blacklisted:"黑名单",Probation:"试用"}[s]||s; }
+function genderZh(v){ return {male:"男",female:"女",undisclosed:"不披露"}[v]||""; }
+function entityTypeZh(v){ return {individual:"个人译员",vendor:"供应商"}[v]||""; }
+function currentProjectText(t) {
+  const list = t?.current_projects || [];
+  return list.length
+    ? list.map(p => `${p.project_name}${p.role ? `·${p.role}` : ""}`).join("、")
+    : (t?.current_project || "");
+}
+function currentProjectHtml(t) {
+  const list = t?.current_projects || [];
+  if (!list.length) return t?.current_project ? esc(t.current_project) : m();
+  return `<div class="project-tags">${list.map(p => `<span class="project-tag"><b>${esc(p.project_name)}</b>${p.role ? `·${esc(p.role)}` : ""}</span>`).join("")}</div>`;
+}
 function esc(s){ return (s==null?"":String(s)).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c])); }
 function val(id){ const v=document.getElementById(id).value.trim(); return v===""?null:v; }
 function num(id){ const v=document.getElementById(id).value.trim(); return v===""?null:Number(v); }
@@ -426,8 +625,10 @@ function validateTranslatorForm() {
 }
 function validatePOForm() {
   if (!validMonthField("p-settlement_month", "结算月", true)) return false;
-  if (!validRange("p-word_count", "字数", 0, null, false)) return false;
-  return validRange("p-rate", "单价", 0, null, false);
+  const mode=document.getElementById("p-pricing_mode").value;
+  if(["per_1000","per_hour"].includes(mode)&&!validRange("p-word_count","数量",0,null,true))return false;
+  if(["per_1000","per_hour"].includes(mode)&&!validRange("p-rate","单价",0,null,true))return false;
+  return validRange("p-amount","金额",0,null,["fixed","manual"].includes(mode));
 }
 function rateField(role){ return {"翻译":"translation_rate", "MTPE":"mtpe_rate", "审校":"review_rate", "LQA":"lqa_rate", "LQE":"lqe_rate"}[role] || ""; }
 function langPair(p){ return p && p.source_lang && p.target_lang ? `${esc(p.source_lang)}→${esc(p.target_lang)}` : m(); }
@@ -505,7 +706,11 @@ function openEdit(id) {
   document.getElementById("f-id").value = id || "";
   document.getElementById("editLangPairBlock").style.display = id ? "" : "none";
   TRF.forEach(f => document.getElementById("f-"+f).value = t[f]!=null ? t[f] : "");
-  if (!id) document.getElementById("f-status").value = "Active";
+  if (!id) {
+    document.getElementById("f-status").value = "Active";
+    document.getElementById("f-settlement_mode").value = "monthly";
+    document.getElementById("f-gender").value = "male";
+  }
   renderEditLangPairs(id);
   document.getElementById("editMask").classList.add("open");
 }
@@ -564,6 +769,7 @@ async function saveTr() {
   const b = {}; TRF.forEach(f => { let v=document.getElementById("f-"+f).value.trim(); b[f]=v===""?null:v; });
   if (!b.name) { showToast("姓名必填", "error"); return; }
   if (!b.native_language) { showToast("母语必填", "error"); return; }
+  if (!b.gender) { showToast("性别必须选择男或女", "error"); return; }
   if (!validateTranslatorForm()) return;
   b.status = b.status||"Active";
   const id = document.getElementById("f-id").value;
@@ -580,7 +786,15 @@ async function importTr(input) {
   const r = await fetch("/api/import/translators", {method:"POST", headers:{"Authorization":"Bearer "+TOKEN}, body:fd});
   if (r.status===403) { showToast("只读视角，无导入权限", "error"); return; }
   if (!r.ok) { showToast("导入失败", "error"); return; }
-  const d = await r.json(); showToast("已导入 " + d.imported + " 条", "success"); load();
+  const d = await r.json();
+  const updatedText = d.updated ? `，同 ID 覆盖 ${d.updated} 条` : "";
+  const projectText = d.imported_projects ? `，项目经历 ${d.imported_projects} 条` : "";
+  const aliasText = d.imported_aliases ? `，名称映射 ${d.imported_aliases} 条` : "";
+  const invalidText = (d.invalid_rows?.length || d.invalid_project_rows?.length || d.invalid_alias_rows?.length)
+    ? `；${(d.invalid_rows?.length||0) + (d.invalid_project_rows?.length||0) + (d.invalid_alias_rows?.length||0)} 行未导入`
+    : "";
+  showToast(`已新增译员 ${d.imported} 条${updatedText}${aliasText}${projectText}${invalidText}`, "success");
+  load();
 }
 async function importLQE(input) {
   const f=input.files[0]; input.value=""; if(!f) return;
@@ -594,7 +808,8 @@ async function importLQE(input) {
 }
 
 /* ---- 详情 + 子表 ---- */
-const SUBS = [["lang","语言对"],["rate","报价变更"],["quality","质量记分"],["contracts","合同"],["payment","支付信息"],["complaints","客诉"],["capacity","产能"]];
+const SUBS = [["projects","项目经历"],["aliases","名称映射"],["lang","语言对"],["prices","项目价格"],["rate","报价变更"],["quality","质量记分"],["contracts","合同"],["payment","支付账户"],["attachments","资质附件"],["complaints","客诉"],["capacity","产能"]];
+let PROJECTS = [], ALIASES = [], PROJECT_PRICES = [], PAYMENT_ACCOUNTS = [], ATTACHMENTS = [];
 function detailVal(v) { return v==null||v==="" ? "—" : esc(v); }
 function detailBool(b) { return b===true ? "是" : (b===false ? "否" : null); }
 function detailMetric(label, value) {
@@ -629,43 +844,51 @@ async function renderDetailSummary() {
         <div class="profile-name">${esc(CUR.name)}</div>
         <div class="profile-meta">
           <span class="chip ok">${esc(status)}</span>
+          <span class="chip">${detailVal(entityTypeZh(CUR.entity_type))}</span>
           <span class="chip">评级 ${detailVal(CUR.internal_rating)}</span>
           <span class="chip">${detailVal(CUR.language_pairs)}</span>
         </div>
       </div>
       <div class="profile-meta">
-        <span class="chip warn">${detailVal(CUR.availability)}</span>
-        <span class="chip">${detailVal(CUR.current_project)}</span>
+        <span class="chip warn">${detailVal(CUR.computed_availability || CUR.availability)}${CUR.computed_load_pct==null?"":` · ${fmt(CUR.computed_load_pct)}%`}${CUR.availability_conflict?" ⚠人工冲突":""}</span>
+        <span class="chip">${detailVal(currentProjectText(CUR))}</span>
       </div>
     </div>
     <div class="metric-row">
-      ${detailMetric("最近 QA", CUR.recent_qa_score)}
-      ${detailMetric("累计 QA", CUR.cumulative_qa_score)}
+      ${detailMetric("最近 LQE", CUR.recent_qa_score)}
+      ${detailMetric("LQE 平均分", CUR.cumulative_qa_score)}
       ${detailMetric("累计未付", CUR.cumulative_unpaid)}
       ${detailMetric("累计字数", CUR.cumulative_word_count)}
     </div>
     <div class="detail-sections">
       ${detailSection("基础信息", [
         ["母语", CUR.native_language],
+        ["主体类型", entityTypeZh(CUR.entity_type)],
+        ["性别", genderZh(CUR.gender)],
         ["入库日期", CUR.onboarding_date],
         ["来源", CUR.source],
         ["合作评级", CUR.cooperation_rating]
       ])}
       ${pairRateSection(languagePairs)}
       ${detailSection("项目与产能", [
-        ["当前项目", CUR.current_project],
-        ["角色", CUR.role],
-        ["档期", CUR.availability],
+        ["当前项目", currentProjectText(CUR)],
+        ["人工档期", CUR.availability],
+        ["计算档期", CUR.computed_availability],
+        ["计算负荷%", CUR.computed_load_pct],
+        ["日产字数", CUR.daily_output],
         ["最近联系", CUR.last_contact]
       ])}
       ${detailSection("合同与支付", [
         ["币种", CUR.currency],
         ["支付方式", CUR.payment_method],
+        ["结算策略", CUR.settlement_mode === "cumulative" ? "累计结" : "月结"],
         ["合同状态", CUR.contract_status],
         ["合同到期", CUR.contract_expiry],
         ["NDA", detailBool(CUR.nda_signed)]
       ])}
       ${detailSection("质量与风险", [
+        ["人工评级", CUR.manual_rating],
+        ["人工评级原因", CUR.manual_rating_reason],
         ["低错次数", CUR.low_error_count],
         ["低错率/千字", CUR.low_error_rate],
         ["客诉次数", CUR.complaint_count],
@@ -685,12 +908,12 @@ async function openDetail(id) {
   await renderDetailSummary();
   document.getElementById("dSubtabs").innerHTML = SUBS.map(([k,l],idx) =>
     `<button class="subtab ${idx===0?"on":""}" data-k="${k}" onclick="showSub('${k}')">${l}</button>`).join("");
-  showSub("lang");
+  showSub("projects");
   document.getElementById("detailMask").classList.add("open");
 }
 function showSub(k) {
   document.querySelectorAll("#dSubtabs .subtab").forEach(b => b.classList.toggle("on", b.dataset.k===k));
-  ({lang:subLang, rate:subRate, quality:subQuality, contracts:subContracts, payment:subPayment, complaints:subComplaints, capacity:subCapacity}[k])();
+  ({projects:subProjects, aliases:subAliases, lang:subLang, prices:subPrices, rate:subRate, quality:subQuality, contracts:subContracts, payment:subPayment, attachments:subAttachments, complaints:subComplaints, capacity:subCapacity}[k])();
 }
 function tbl(headers, bodyHtml) {
   return `<table class="mini"><thead><tr>${headers.map(h=>`<th>${h}</th>`).join("")}</tr></thead><tbody>${bodyHtml || `<tr><td colspan="${headers.length}" class="muted" style="padding:12px">暂无记录</td></tr>`}</tbody></table>`;
@@ -705,9 +928,191 @@ async function delChild(path, sub, label) {
     await load();
     CUR = DATA.find(x=>x.id===CUR.id);
     await renderDetailSummary();
-    await ({lang:subLang, rate:subRate, quality:subQuality, contracts:subContracts, payment:subPayment, complaints:subComplaints, capacity:subCapacity}[sub])();
+    await ({projects:subProjects, aliases:subAliases, lang:subLang, prices:subPrices, rate:subRate, quality:subQuality, contracts:subContracts, payment:subPayment, attachments:subAttachments, complaints:subComplaints, capacity:subCapacity}[sub])();
   } catch(e) {}
 }
+
+function projectSourceText(project) {
+  return project.cooperation_source === "our_company"
+    ? "我司合作"
+    : `外部合作${project.external_company ? ` · ${project.external_company}` : ""}`;
+}
+function projectDates(project) {
+  if (!project.start_date && !project.end_date) return "—";
+  return `${project.start_date || "未填"} → ${project.end_date || (project.project_status === "current" ? "进行中" : "未填")}`;
+}
+function projectWorkload(project) {
+  const parts = [];
+  if (project.remaining_volume != null) parts.push(`剩余 ${fmt(project.remaining_volume)}`);
+  if (project.deadline) parts.push(`截止 ${project.deadline}`);
+  return parts.join(" · ") || "—";
+}
+function projectRows(list) {
+  return list.map(project => `<tr>
+    <td><b>${esc(project.project_name)}</b></td>
+    <td>${esc(projectSourceText(project))}</td>
+    <td>${detailVal(project.role)}</td>
+    <td>${langPair(project)}</td>
+    <td>${esc(projectDates(project))}</td>
+    <td>${esc(projectWorkload(project))}</td>
+    <td>${detailVal(project.remarks)}</td>
+    <td>
+      <button class="btn-link edit-only" onclick="openProjectEditor(null,${project.id})">编辑</button>
+      <button class="btn-link danger edit-only" onclick="deleteProjectExperience(${project.id})">删除</button>
+    </td>
+  </tr>`).join("");
+}
+function projectBlock(status, label, list) {
+  return `<section class="project-block ${status}">
+    <div class="project-block-head">
+      <h3>${label}</h3>
+      <span class="count">${list.length} 条</span>
+      <button class="btn-ghost edit-only" onclick="openProjectEditor('${status}')">+ 添加</button>
+    </div>
+    ${tbl(["项目","合作来源","角色","语言对","项目周期","剩余量 / 截止","备注","操作"], projectRows(list))}
+  </section>`;
+}
+async function subProjects() {
+  PROJECTS = await get(`/api/translators/${CUR.id}/project-experiences`);
+  const current = PROJECTS.filter(project => project.project_status === "current");
+  const past = PROJECTS.filter(project => project.project_status === "past");
+  document.getElementById("detailBody").innerHTML = `
+    <div class="project-ledger">
+      ${projectBlock("current", "当前项目", current)}
+      ${projectBlock("past", "过往项目", past)}
+    </div>
+    <div id="projectEditor"></div>`;
+}
+async function subAliases() {
+  ALIASES = await get(`/api/translators/${CUR.id}/aliases`);
+  const rows = ALIASES.map(item=>`<tr>
+    <td>${esc(item.alias)}</td>
+    <td class="muted">${esc(item.created_at)||"—"}</td>
+    <td><button class="btn-link edit-only" onclick="editAlias(${item.id})">编辑</button>${delBtn(`/api/translators/${CUR.id}/aliases/${item.id}`,"aliases","名称映射")}</td>
+  </tr>`).join("");
+  document.getElementById("detailBody").innerHTML = tbl(["别名 / 曾用名","创建时间","操作"],rows)+`
+    <div class="addrow edit-only">
+      <input id="alias-name" maxlength="200" placeholder="英文名、中文名或曾用名">
+      <button class="btn-primary" onclick="addAlias()">添加名称映射</button>
+    </div>
+    <div class="muted" style="margin-top:8px">名称可以修改；系统始终通过译员 ID 关联，旧姓名会自动保留为映射。</div>`;
+}
+async function addAlias() {
+  const alias=val("alias-name"); if(!alias)return failField("名称映射不能为空");
+  await api("POST",`/api/translators/${CUR.id}/aliases`,{alias});
+  await load();
+  CUR=DATA.find(x=>x.id===CUR.id);
+  subAliases();
+}
+async function editAlias(id) {
+  const item=ALIASES.find(row=>row.id===id); if(!item)return;
+  const alias=prompt("修改名称映射",item.alias);
+  if(alias==null||!alias.trim())return;
+  await api("PUT",`/api/translators/${CUR.id}/aliases/${id}`,{alias:alias.trim()});
+  await load();
+  CUR=DATA.find(x=>x.id===CUR.id);
+  subAliases();
+}
+function projectOptions(values, selected, emptyLabel) {
+  const empty = emptyLabel == null ? "" : `<option value="">${emptyLabel}</option>`;
+  return empty + values.map(([value,label]) => `<option value="${value}" ${value===selected?"selected":""}>${label}</option>`).join("");
+}
+function openProjectEditor(status, projectId) {
+  const project = projectId ? PROJECTS.find(item => item.id === projectId) : null;
+  const data = project || {
+    project_status: status || "current",
+    cooperation_source: "our_company",
+  };
+  const editor = document.getElementById("projectEditor");
+  editor.innerHTML = `<section class="project-editor">
+    <h3>${project ? "编辑项目经历" : (data.project_status === "current" ? "新增当前项目" : "新增过往项目")}</h3>
+    <div class="project-form">
+      <input id="pe-id" type="hidden" value="${project?.id || ""}">
+      <div class="field"><label>项目状态 <span class="req">*</span></label><select id="pe-status">${projectOptions([["current","当前项目"],["past","过往项目"]],data.project_status)}</select></div>
+      <div class="field"><label>合作来源 <span class="req">*</span></label><select id="pe-source" onchange="toggleProjectCompany()">${projectOptions([["our_company","与我司合作"],["external","与别家合作"]],data.cooperation_source)}</select></div>
+      <div class="field span-2"><label>项目名称 <span class="req">*</span></label><input id="pe-name" value="${esc(data.project_name||"")}"></div>
+      <div class="field span-2" id="pe-company-wrap"><label>合作公司</label><input id="pe-company" value="${esc(data.external_company||"")}" placeholder="可填写公司或工作室名称"></div>
+      <div class="field"><label>担任角色</label><select id="pe-role">${projectOptions([["翻译","翻译"],["审校","审校"],["MTPE","MTPE"],["LQA","LQA"],["LQE","LQE"],["其他","其他"]],data.role,"—")}</select></div>
+      <div class="field"><label>开始日期</label><input id="pe-start" type="date" value="${esc(data.start_date||"")}"></div>
+      <div class="field"><label>源语言</label>${langInputHtml("pe-src","不指定",data.source_lang)}</div>
+      <div class="field"><label>目标语言</label>${langInputHtml("pe-tgt","不指定",data.target_lang)}</div>
+      <div class="field"><label>结束日期</label><input id="pe-end" type="date" value="${esc(data.end_date||"")}"></div>
+      <div class="field"><label>剩余量</label><input id="pe-volume" type="number" min="0" step="1" value="${data.remaining_volume??""}"></div>
+      <div class="field"><label>截止日期</label><input id="pe-deadline" type="date" value="${esc(data.deadline||"")}"></div>
+      <div class="field full"><label>备注</label><textarea id="pe-remarks">${esc(data.remarks||"")}</textarea></div>
+    </div>
+    <div class="project-form-actions">
+      <button class="btn-ghost" onclick="cancelProjectEditor()">取消</button>
+      <button class="btn-primary" onclick="saveProjectExperience()">保存项目经历</button>
+    </div>
+  </section>`;
+  toggleProjectCompany();
+  editor.scrollIntoView({behavior:"smooth", block:"nearest"});
+}
+function toggleProjectCompany() {
+  const source = document.getElementById("pe-source");
+  const wrap = document.getElementById("pe-company-wrap");
+  if (source && wrap) wrap.style.display = source.value === "external" ? "" : "none";
+}
+function cancelProjectEditor() {
+  const editor = document.getElementById("projectEditor");
+  if (editor) editor.innerHTML = "";
+}
+async function saveProjectExperience() {
+  const projectId = val("pe-id");
+  const projectName = val("pe-name");
+  if (!projectName) return failField("项目名称必填");
+  if (!validDateField("pe-start", "开始日期", false)) return;
+  if (!validDateField("pe-end", "结束日期", false)) return;
+  if (!validDateField("pe-deadline", "截止日期", false)) return;
+  if (!validRange("pe-volume", "剩余量", 0, null, false)) return;
+  const pair = readLangPair("pe-src", "pe-tgt");
+  if (!!pair.source_lang !== !!pair.target_lang) return failField("源语言和目标语言需同时填写");
+  if (pair.source_lang && (!LANG_OPTIONS.includes(pair.source_lang) || !LANG_OPTIONS.includes(pair.target_lang))) {
+    return failField("请选择系统语言代码");
+  }
+  if (pair.source_lang && pair.source_lang === pair.target_lang) return failField("源语言和目标语言不能相同");
+  const cooperationSource = document.getElementById("pe-source").value;
+  const body = {
+    cooperation_source: cooperationSource,
+    project_status: document.getElementById("pe-status").value,
+    project_name: projectName,
+    external_company: cooperationSource === "external" ? val("pe-company") : null,
+    role: val("pe-role"),
+    source_lang: pair.source_lang,
+    target_lang: pair.target_lang,
+    start_date: val("pe-start"),
+    end_date: val("pe-end"),
+    remaining_volume: num("pe-volume"),
+    deadline: val("pe-deadline"),
+    remarks: val("pe-remarks"),
+  };
+  try {
+    await api(
+      projectId ? "PUT" : "POST",
+      `/api/translators/${CUR.id}/project-experiences${projectId ? `/${projectId}` : ""}`,
+      body,
+    );
+    showToast(projectId ? "项目经历已更新" : "项目经历已添加", "success");
+    await load();
+    CUR = DATA.find(item => item.id === CUR.id);
+    await renderDetailSummary();
+    await subProjects();
+  } catch(e) {}
+}
+async function deleteProjectExperience(projectId) {
+  const project = PROJECTS.find(item => item.id === projectId);
+  if (!project || !confirm(`删除项目经历「${project.project_name}」？`)) return;
+  try {
+    await api("DELETE", `/api/translators/${CUR.id}/project-experiences/${projectId}`);
+    showToast("项目经历已删除", "success");
+    await load();
+    CUR = DATA.find(item => item.id === CUR.id);
+    await renderDetailSummary();
+    await subProjects();
+  } catch(e) {}
+}
+
 async function subLang() {
   const list = await get(`/api/translators/${CUR.id}/language-pairs`);
   const rows = list.map(c=>`<tr><td>${esc(c.source_lang)}</td><td>${esc(c.target_lang)}</td><td class="num">${c.translation_rate??"—"}</td><td class="num">${c.mtpe_rate??"—"}</td><td class="num">${c.review_rate??"—"}</td><td class="num">${c.lqa_rate??"—"}</td><td class="num">${c.lqe_rate??"—"}</td><td>${esc(c.currency)||"—"}</td><td>${delBtn(`/api/translators/${CUR.id}/language-pairs/${c.id}`,"lang","语言对")}</td></tr>`).join("");
@@ -736,6 +1141,58 @@ async function addLang() {
   CUR = DATA.find(x=>x.id===CUR.id);
   await renderDetailSummary();
   subLang();
+}
+
+async function subPrices() {
+  PROJECT_PRICES = await get(`/api/translators/${CUR.id}/project-prices`);
+  const rows = PROJECT_PRICES.map(price=>`<tr>
+    <td>${esc(price.project_name)}</td><td>${price.price_type==="fixed"?"一口价":"其他"}</td>
+    <td>${esc(price.custom_task_name||price.task_type)||"—"}</td><td>${langPair(price)}</td>
+    <td class="num">${fmt(price.amount)}</td><td>${esc(price.unit)}</td><td>${esc(price.currency)}</td>
+    <td><button class="btn-link edit-only" onclick="editProjectPrice(${price.id})">编辑</button>${delBtn(`/api/translators/${CUR.id}/project-prices/${price.id}`,"prices","项目价格")}</td>
+  </tr>`).join("");
+  document.getElementById("detailBody").innerHTML = tbl(["项目","类型","任务","语言对","金额","单位","币种","操作"],rows)+`
+    <div class="addrow edit-only">
+      <input id="pp-id" type="hidden">
+      <div class="field"><label>项目</label><input id="pp-project" style="width:130px"></div>
+      <div class="field"><label>类型</label><select id="pp-type" onchange="toggleProjectPriceType()"><option value="fixed">一口价</option><option value="custom">其他</option></select></div>
+      <div class="field"><label>自定义任务</label><input id="pp-custom" style="width:120px" placeholder="其他时必填"></div>
+      <div class="field"><label>源语言</label>${langInputHtml("pp-src","可选")}</div>
+      <div class="field"><label>目标语言</label>${langInputHtml("pp-tgt","可选")}</div>
+      <div class="field"><label>金额</label><input id="pp-amount" type="number" min="0" step="0.01" style="width:90px"></div>
+      <div class="field"><label>单位</label><select id="pp-unit"><option value="project">项目</option><option value="task">任务</option><option value="hour">小时</option><option value="word">字</option><option value="per_1000">千字</option><option value="other">其他</option></select></div>
+      <div class="field"><label>币种</label><select id="pp-currency"><option>CNY</option><option>USD</option><option>EUR</option></select></div>
+      <button class="btn-primary" onclick="saveProjectPrice()">保存价格</button>
+    </div>`;
+  toggleProjectPriceType();
+}
+function toggleProjectPriceType() {
+  const type=document.getElementById("pp-type"), custom=document.getElementById("pp-custom"), unit=document.getElementById("pp-unit");
+  if (!type||!custom||!unit) return;
+  custom.disabled=type.value==="fixed";
+  if(type.value==="fixed"&&!["project","task"].includes(unit.value)) unit.value="project";
+}
+function editProjectPrice(id) {
+  const price=PROJECT_PRICES.find(item=>item.id===id); if(!price)return;
+  document.getElementById("pp-id").value=price.id;
+  document.getElementById("pp-project").value=price.project_name||"";
+  document.getElementById("pp-type").value=price.price_type;
+  document.getElementById("pp-custom").value=price.custom_task_name||"";
+  document.getElementById("pp-src").value=price.source_lang||"";
+  document.getElementById("pp-tgt").value=price.target_lang||"";
+  document.getElementById("pp-amount").value=price.amount??"";
+  document.getElementById("pp-unit").value=price.unit;
+  document.getElementById("pp-currency").value=price.currency;
+  toggleProjectPriceType();
+}
+async function saveProjectPrice() {
+  const pair=readLangPair("pp-src","pp-tgt"), id=val("pp-id"), type=document.getElementById("pp-type").value;
+  const body={project_name:val("pp-project"),price_type:type,custom_task_name:type==="custom"?val("pp-custom"):null,
+    source_lang:pair.source_lang,target_lang:pair.target_lang,amount:num("pp-amount"),unit:document.getElementById("pp-unit").value,
+    currency:document.getElementById("pp-currency").value};
+  if(!body.project_name||body.amount==null)return failField("项目和金额必填");
+  if(type==="custom"&&!body.custom_task_name)return failField("其他价格必须填写自定义任务");
+  try{await api(id?"PUT":"POST",`/api/translators/${CUR.id}/project-prices${id?"/"+id:""}`,body);subPrices();}catch(e){}
 }
 
 async function subRate() {
@@ -769,22 +1226,25 @@ async function addRate() {
 }
 async function subQuality() {
   const list = await get(`/api/translators/${CUR.id}/quality`);
-  const rows = list.map(c=>`<tr><td>${esc(c.evaluation_period)||"—"}</td><td>${esc(c.project)||"—"}</td><td>${esc(c.qa_type)||"—"}</td><td><b>${c.score??"—"}</b></td><td>${c.critical_errors}/${c.major_errors}/${c.minor_errors}</td><td>${esc(c.reviewer)||"—"}</td><td>${delBtn(`/api/translators/${CUR.id}/quality/${c.id}`,"quality","质量记分")}</td></tr>`).join("");
-  document.getElementById("detailBody").innerHTML = tbl(["周期","项目","类型","评分","C/M/Minor","评审人","操作"], rows) + `
+  const rows = list.map(c=>`<tr><td>${esc(c.evaluation_period)||"—"}</td><td>${esc(c.project)||"—"}</td><td>${esc(c.qa_type)||"—"}</td><td><b>${c.score??"—"}</b></td><td>${c.critical_errors}/${c.major_errors}/${c.minor_errors}</td><td>${c.is_qualified==null?"—":(c.is_qualified?"合格":"不合格")}${c.failure_reason?` · ${esc(c.failure_reason)}`:""}</td><td>${esc(c.reviewer)||"—"}</td><td>${delBtn(`/api/translators/${CUR.id}/quality/${c.id}`,"quality","质量记分")}</td></tr>`).join("");
+  document.getElementById("detailBody").innerHTML = tbl(["周期","项目","类型","评分","C/M/Minor","结果","评审人","操作"], rows) + `
     <div class="addrow edit-only">
       <div class="field"><label>周期</label><input id="q-period" type="month" value="${month()}" style="width:105px"></div>
       <div class="field"><label>项目</label><input id="q-project" style="width:100px"></div>
-      <div class="field"><label>类型</label><select id="q-type"><option>终检</option><option>过程抽检</option><option>首件审核</option><option>仲裁</option></select></div>
+      <div class="field"><label>类型</label><select id="q-type"><option>LQE</option><option>QA</option><option>终检</option><option>过程抽检</option><option>首件审核</option><option>仲裁</option></select></div>
       <div class="field"><label>评分</label><input id="q-score" type="number" min="0" max="100" style="width:70px"></div>
       <div class="field"><label>C</label><input id="q-c" type="number" min="0" value="0" style="width:50px"></div>
       <div class="field"><label>M</label><input id="q-m" type="number" min="0" value="0" style="width:50px"></div>
       <div class="field"><label>Minor</label><input id="q-mi" type="number" min="0" value="0" style="width:50px"></div>
+      <div class="field"><label>结果</label><select id="q-qualified"><option value="">未标记</option><option value="true">合格</option><option value="false">不合格</option></select></div>
+      <div class="field"><label>不合格原因</label><input id="q-failure" style="width:120px"></div>
       <div class="field"><label>评审人</label><input id="q-rev" style="width:80px"></div>
       <button class="btn-primary" onclick="addQuality()">添加</button>
     </div>`;
 }
 async function addQuality() {
-  const b = {evaluation_period:val("q-period"), project:val("q-project"), qa_type:document.getElementById("q-type").value, score:num("q-score"), critical_errors:num("q-c")||0, major_errors:num("q-m")||0, minor_errors:num("q-mi")||0, reviewer:val("q-rev")};
+  const qualified=val("q-qualified");
+  const b = {evaluation_period:val("q-period"), project:val("q-project"), qa_type:document.getElementById("q-type").value, score:num("q-score"), critical_errors:num("q-c")||0, major_errors:num("q-m")||0, minor_errors:num("q-mi")||0, is_qualified:qualified==null?null:qualified==="true", failure_reason:val("q-failure"), reviewer:val("q-rev")};
   if (!validMonthField("q-period", "周期", false)) return;
   if (!validRange("q-score", "评分", 0, 100, false)) return;
   if (!validRange("q-c", "C", 0, null, false)) return;
@@ -813,35 +1273,110 @@ async function addContract() {
   try { await api("POST",`/api/translators/${CUR.id}/contracts`, b); subContracts(); } catch(e){}
 }
 async function subPayment() {
-  const p = await get(`/api/translators/${CUR.id}/payment`);
-  const box = p ? `<div class="secbox">
-      <div class="kv"><b>币种</b>${esc(p.currency)||"—"}</div>
-      <div class="kv"><b>银行</b>${esc(p.bank_name)||"—"}</div>
-      <div class="kv"><b>收款人</b>${esc(p.payee_name)||"—"}</div>
-      <div class="kv"><b>银行账号</b><span id="pv-bank">${esc(p.bank_account)||"—"}</span></div>
-      <div class="kv"><b>身份证</b><span id="pv-id">${esc(p.id_card)||"—"}</span></div>
-      <div class="kv"><b>支持微信</b>${p.supports_wechat?"是":"否"}</div>
-      <button class="btn-ghost edit-only" style="margin-top:6px" onclick="revealPay()">查看明文（记审计）</button>
-      <button class="btn-link danger edit-only" style="margin-top:6px" onclick="delChild('/api/translators/${CUR.id}/payment','payment','支付信息')">删除</button>
-    </div>` : `<div class="empty">暂无支付信息</div>`;
-  document.getElementById("detailBody").innerHTML = box + `
+  PAYMENT_ACCOUNTS = await api("GET",`/api/translators/${CUR.id}/payment-accounts`);
+  const methodLabel={wechat:"微信",alipay:"支付宝",personal_bank:"个人银行卡",corporate_cny:"对公人民币",corporate_usd:"对公美元"};
+  const rows=PAYMENT_ACCOUNTS.map(account=>`<tr>
+    <td>${methodLabel[account.method]||esc(account.method)}</td>
+    <td>${esc(account.currency)}</td><td>${esc(account.account_name)||"—"}</td>
+    <td id="pay-account-${account.id}">${esc(account.account_number)||"—"}</td>
+    <td>${esc(account.bank_name)||"—"}</td><td>${esc(account.swift_code)||"—"}</td>
+    <td>${esc(account.remarks)||"—"}</td>
+    <td>${account.has_qr?`<button class="btn-link" onclick="downloadPaymentQR(${account.id})">下载收款码</button>`:"—"}</td>
+    <td><button class="btn-link edit-only" onclick="editPaymentAccount(${account.id})">编辑</button>
+      <button class="btn-link edit-only" onclick="revealPaymentAccount(${account.id})">明文</button>
+      ${["wechat","alipay"].includes(account.method)?`<label class="btn-link edit-only">上传码<input type="file" accept=".png,.jpg,.jpeg" style="display:none" onchange="uploadPaymentQR(${account.id},this)"></label>`:""}
+      ${delBtn(`/api/translators/${CUR.id}/payment-accounts/${account.id}`,"payment","支付账户")}</td>
+  </tr>`).join("");
+  document.getElementById("detailBody").innerHTML = tbl(["方式","币种","账户名","账号","银行","SWIFT","备注","收款码","操作"],rows) + `
     <div class="addrow edit-only" style="margin-top:12px">
-      <div class="field"><label>币种</label><input id="pm-cur" value="${p?esc(p.currency)||"":"CNY"}" style="width:60px"></div>
-      <div class="field"><label>银行</label><input id="pm-bank" value="${p?esc(p.bank_name)||"":""}" style="width:110px"></div>
-      <div class="field"><label>收款人</label><input id="pm-payee" value="${p?esc(p.payee_name)||"":""}" style="width:90px"></div>
-      <div class="field"><label>银行账号</label><input id="pm-acct" placeholder="留空不改" style="width:150px"></div>
-      <div class="field"><label>身份证</label><input id="pm-idc" placeholder="留空不改" style="width:150px"></div>
-      <button class="btn-primary" onclick="savePayment()">保存</button>
+      <input id="pa-id" type="hidden">
+      <div class="field"><label>方式</label><select id="pa-method" onchange="togglePaymentFields()"><option value="wechat">微信</option><option value="alipay">支付宝</option><option value="personal_bank">个人银行卡</option><option value="corporate_cny">对公人民币</option><option value="corporate_usd">对公美元</option></select></div>
+      <div class="field"><label>账户名</label><input id="pa-name" style="width:110px"></div>
+      <div class="field"><label>账号</label><input id="pa-number" style="width:150px"></div>
+      <div class="field" id="pa-bank-field"><label>银行</label><input id="pa-bank" style="width:110px"></div>
+      <div class="field" id="pa-address-field"><label>银行地址</label><input id="pa-address" style="width:150px"></div>
+      <div class="field" id="pa-swift-field"><label>SWIFT</label><input id="pa-swift" style="width:100px"></div>
+      <div class="field" id="pa-routing-field"><label>路由号</label><input id="pa-routing" style="width:90px"></div>
+      <div class="field" id="pa-tax-field"><label>税号</label><input id="pa-tax" style="width:120px"></div>
+      <div class="field"><label>备注</label><input id="pa-remarks" style="width:140px"></div>
+      <button class="btn-primary" onclick="savePaymentAccount()">保存账户</button>
+      <button class="btn-ghost" onclick="resetPaymentAccountForm()">清空</button>
+    </div>`;
+  togglePaymentFields();
+}
+async function revealPaymentAccount(id) {
+  try{const account=await api("GET",`/api/translators/${CUR.id}/payment-accounts/${id}/reveal`);
+    document.getElementById("pay-account-"+id).textContent=account.account_number||"—";}catch(e){}
+}
+async function editPaymentAccount(id) {
+  try {
+    const account=await api("GET",`/api/translators/${CUR.id}/payment-accounts/${id}/reveal`);
+    document.getElementById("pa-id").value=account.id;
+    document.getElementById("pa-method").value=account.method;
+    document.getElementById("pa-name").value=account.account_name||"";
+    document.getElementById("pa-number").value=account.account_number||"";
+    document.getElementById("pa-bank").value=account.bank_name||"";
+    document.getElementById("pa-address").value=account.bank_address||"";
+    document.getElementById("pa-swift").value=account.swift_code||"";
+    document.getElementById("pa-routing").value=account.routing_code||"";
+    document.getElementById("pa-tax").value=account.tax_id||"";
+    document.getElementById("pa-remarks").value=account.remarks||"";
+    togglePaymentFields();
+  } catch(e) {}
+}
+function togglePaymentFields() {
+  const method=document.getElementById("pa-method")?.value;if(!method)return;
+  const bank=["personal_bank","corporate_cny","corporate_usd"].includes(method);
+  const usd=method==="corporate_usd",cny=method==="corporate_cny";
+  [["pa-bank-field",bank],["pa-address-field",usd],["pa-swift-field",usd],["pa-routing-field",usd],["pa-tax-field",cny]]
+    .forEach(([id,show])=>document.getElementById(id).style.display=show?"":"none");
+}
+function resetPaymentAccountForm() {
+  ["pa-id","pa-name","pa-number","pa-bank","pa-address","pa-swift","pa-routing","pa-tax","pa-remarks"].forEach(id=>document.getElementById(id).value="");
+  document.getElementById("pa-method").value="wechat";
+  togglePaymentFields();
+}
+async function savePaymentAccount() {
+  const id=val("pa-id"),method=document.getElementById("pa-method").value;
+  const body={method,account_name:val("pa-name"),account_number:val("pa-number"),
+    bank_name:val("pa-bank"),bank_address:val("pa-address"),swift_code:val("pa-swift"),routing_code:val("pa-routing"),
+    tax_id:val("pa-tax"),remarks:val("pa-remarks"),is_default:false};
+  if(!["personal_bank","corporate_cny","corporate_usd"].includes(method))body.bank_name=null;
+  if(method!=="corporate_usd")body.bank_address=body.swift_code=body.routing_code=null;
+  if(method!=="corporate_cny")body.tax_id=null;
+  if(![body.account_name,body.account_number,body.bank_name,body.bank_address,body.swift_code,body.routing_code,body.tax_id,body.remarks].some(Boolean))return failField("至少填写一项账户信息");
+  try{await api(id?"PUT":"POST",`/api/translators/${CUR.id}/payment-accounts${id?"/"+id:""}`,body);subPayment();}catch(e){}
+}
+function downloadPaymentQR(id) {
+  const account=PAYMENT_ACCOUNTS.find(item=>item.id===id);
+  if(account)downloadAuth(`/api/translators/${CUR.id}/payment-accounts/${id}/qr`,account.qr_original_name||"qr.png");
+}
+async function uploadPaymentQR(id,input) {
+  const file=input.files?.[0];if(!file)return;const fd=new FormData();fd.append("file",file);
+  try{await apiForm("POST",`/api/translators/${CUR.id}/payment-accounts/${id}/qr`,fd);subPayment();}catch(e){}finally{input.value="";}
+}
+async function subAttachments() {
+  ATTACHMENTS=await api("GET",`/api/translators/${CUR.id}/attachments`);
+  const category={certificate:"证书",test:"测试",sample:"样稿",other:"其他"};
+  const rows=ATTACHMENTS.map(file=>`<tr><td>${category[file.category]||esc(file.category)}</td><td class="file-name" title="${esc(file.original_name)}">${esc(file.original_name)}</td>
+    <td>${fmt(file.size_bytes/1024)} KB</td><td>${esc(file.created_at)}</td>
+    <td><button class="btn-link" onclick="downloadAttachment(${file.id})">下载</button>
+    ${delBtn(`/api/translators/${CUR.id}/attachments/${file.id}`,"attachments","资质附件")}</td></tr>`).join("");
+  document.getElementById("detailBody").innerHTML=tbl(["分类","文件","大小","上传时间","操作"],rows)+`
+    <div class="addrow edit-only">
+      <div class="field"><label>分类</label><select id="at-category"><option value="certificate">证书</option><option value="test">测试</option><option value="sample">样稿</option><option value="other">其他</option></select></div>
+      <div class="field"><label>文件（≤100MB）</label><input id="at-file" type="file" accept=".pdf,.doc,.docx,.xls,.xlsx,.txt,.png,.jpg,.jpeg"></div>
+      <button class="btn-primary" onclick="uploadAttachment()">上传附件</button>
     </div>`;
 }
-async function revealPay() {
-  try { const f = await api("GET",`/api/translators/${CUR.id}/payment/reveal`);
-    document.getElementById("pv-bank").textContent = f.bank_account || "—";
-    document.getElementById("pv-id").textContent = f.id_card || "—"; } catch(e){}
+function downloadAttachment(id) {
+  const file=ATTACHMENTS.find(item=>item.id===id);
+  if(file)downloadAuth(`/api/translators/${CUR.id}/attachments/${id}`,file.original_name);
 }
-async function savePayment() {
-  const b = {currency:val("pm-cur"), bank_name:val("pm-bank"), payee_name:val("pm-payee"), bank_account:val("pm-acct"), id_card:val("pm-idc"), supports_wechat:false};
-  try { await api("PUT",`/api/translators/${CUR.id}/payment`, b); subPayment(); } catch(e){}
+async function uploadAttachment() {
+  const input=document.getElementById("at-file"),file=input.files?.[0];if(!file)return failField("请选择附件");
+  const fd=new FormData();fd.append("category",document.getElementById("at-category").value);fd.append("file",file);
+  try{await apiForm("POST",`/api/translators/${CUR.id}/attachments`,fd);subAttachments();}catch(e){}
 }
 async function subComplaints() {
   const list = await get(`/api/translators/${CUR.id}/complaints`);
@@ -871,7 +1406,8 @@ async function subCapacity() {
     const week = weekMap[period] || {available:"—"};
     return `<tr><td>${esc(period)}</td><td>${esc(c.project)||"—"}</td><td class="num">${c.occupancy_pct}%</td><td class="num ${week.available<0?"amt-bad":""}">${week.available}%${week.available<0?" ⚠超负荷":""}</td><td>${delBtn(`/api/translators/${CUR.id}/capacity/${c.id}`,"capacity","产能")}</td></tr>`;
   }).join("");
-  document.getElementById("detailBody").innerHTML = tbl(["周","项目","本记录占用","周可用率","操作"], rows) + `
+  const basis=(CUR.availability_basis||[]).map(item=>`${esc(item.project_name)}：${fmt(item.load_pct)}%（${item.role}，翻译日产能 ${fmt(item.daily_capacity)}，月产能 ${fmt(item.monthly_capacity)}）`).join("；")||"当前项目未填写剩余量，沿用人工产能状态";
+  document.getElementById("detailBody").innerHTML = `<div class="secbox"><div class="kv"><b>月度产能状态</b>${detailVal(CUR.computed_availability)}</div><div class="kv"><b>月度占用率</b>${CUR.computed_load_pct==null?"—":fmt(CUR.computed_load_pct)+"%"}</div><div class="kv"><b>人工状态</b>${detailVal(CUR.availability)}${CUR.availability_conflict?' <span class="conflict">⚠冲突</span>':""}</div><div class="muted" style="margin-top:8px">阈值：&lt;50% 空闲；50%–&lt;80% 健康；80%–100% 饱和；&gt;100% 警告。${basis}</div></div><div class="muted" style="margin:10px 0 6px">旧周产能台账（兼容历史数据）</div>` + tbl(["周","项目","本记录占用","周可用率","操作"], rows) + `
     <div class="addrow edit-only">
       <div class="field"><label>年</label><input id="cp-y" type="number" min="1900" max="2100" value="2026" style="width:70px"></div>
       <div class="field"><label>月</label><input id="cp-m" type="number" min="1" max="12" value="${(new Date()).getMonth()+1}" style="width:55px"></div>
@@ -901,81 +1437,191 @@ async function loadPO() {
     const months = [...new Set(all.map(p=>p.settlement_month))].sort().reverse();
     sel.innerHTML = months.map(mo=>`<option>${mo}</option>`).join("") || "<option>2026-06</option>";
   }
-  const month = sel.value, st = document.getElementById("poStatus").value;
+  const month = sel.value;
+  const params = new URLSearchParams();
+  [
+    ["month", month],
+    ["status", filterValue("poStatus")],
+    ["translator", filterValue("poTranslator")],
+    ["project", filterValue("poProject")],
+    ["role", filterValue("poRole")],
+    ["source_lang", filterValue("poSourceLang")],
+    ["target_lang", filterValue("poTargetLang")],
+    ["currency", filterValue("poCurrency")],
+    ["pricing_mode", filterValue("poPricingMode")],
+    ["settlement_mode", filterValue("poSettlementMode")],
+    ["min_amount", filterValue("poMinAmount")],
+    ["max_amount", filterValue("poMaxAmount")],
+    ["po_number", filterValue("poNumber")],
+  ].forEach(([key,value])=>{ if(value) params.set(key,value); });
+  if(params.has("min_amount")&&params.has("max_amount")&&Number(params.get("min_amount"))>Number(params.get("max_amount")))return failField("最低金额不能大于最高金额");
   const [list, sum] = await Promise.all([
-    get(`/api/po?month=${month}` + (st?`&status=${encodeURIComponent(st)}`:"")),
-    get(`/api/po/summary?month=${month}`)]);
+    get(`/api/po?${params.toString()}`),
+    get(`/api/po/summary?${params.toString()}`)]);
+  PO_ROWS=list;
   document.getElementById("poCards").innerHTML = Object.entries(sum.by_currency).map(([c,v]) =>
     `<div class="card"><div class="n num">${fmt(v.unpaid)}</div><div class="l">${c} 待付</div></div>
      <div class="card"><div class="n num">${fmt(v.paid)}</div><div class="l">${c} 已付</div></div>`).join("")
+    + Object.entries(sum.cumulative_unpaid_by_currency||{}).map(([c,v])=>`<div class="card"><div class="n num">${fmt(v)}</div><div class="l">${c} 跨月累计未付</div></div>`).join("")
     || `<div class="card"><div class="n">0</div><div class="l">本月无数据</div></div>`;
-  document.getElementById("poCount").textContent = "共 " + list.length + " 行";
+  document.getElementById("poCount").textContent = "筛选结果 " + list.length + " 行";
   document.getElementById("poEmpty").style.display = list.length ? "none" : "block";
   document.getElementById("poRows").innerHTML = list.map(p => {
     const amt = p.amount_ok ? `<span class="num">${fmt(p.amount)}</span>` : `<span class="num amt-bad" title="应为 ${fmt(p.expected_amount)}">${fmt(p.amount)} ⚠</span>`;
     const opts = ["未开票","已开票待付","已支付","有争议"].map(o=>`<option ${o===p.status?"selected":""}>${o}</option>`).join("");
-    return `<tr><td>${esc(p.translator_name)}</td><td>${esc(p.settlement_month)}</td><td>${esc(p.project)||m()}</td><td>${langPair(p)}</td><td>${esc(p.role)||m()}</td>
+    const modeLabel={per_1000:"按千字",per_hour:"按小时",fixed:"一口价",manual:"手工"}[p.pricing_mode]||p.pricing_mode;
+    return `<tr><td><button class="namebtn" onclick="showTranslatorUnpaid(${p.translator_id})">${esc(p.translator_name)}</button></td><td>${esc(p.settlement_month)}</td><td>${esc(p.project)||m()}</td><td>${langPair(p)}</td><td>${esc(p.role)||m()}</td><td>${esc(modeLabel)}</td>
       <td class="num">${p.word_count??m()}</td><td class="num">${p.rate??m()}</td><td>${amt}</td><td>${esc(p.currency)}</td>
       <td><span class="pill po-status-read st-${p.status}">${esc(p.status)}</span><select class="statussel edit-only" onchange="setPOStatus(${p.id},this.value)">${opts}</select></td>
-      <td class="muted">${esc(p.po_number)||"—"}</td></tr>`;
+      <td class="muted">${esc(p.po_number)||"—"}</td><td><button class="btn-link edit-only" onclick="editPO(${p.id})">人工修正</button></td></tr>`;
   }).join("");
 }
+async function applyPOFilters() { await loadPO(); }
+async function resetPOFilters() {
+  ["poStatus","poTranslator","poProject","poRole","poSourceLang","poTargetLang","poCurrency","poPricingMode","poSettlementMode","poMinAmount","poMaxAmount","poNumber"].forEach(id=>document.getElementById(id).value="");
+  const monthSelect=document.getElementById("poMonth");
+  if(monthSelect.options.length)monthSelect.selectedIndex=0;
+  await loadPO();
+}
 async function setPOStatus(id, status) { try { const res = await api("PUT",`/api/po/${id}/status`,{status}); if (res && res.pending) showToast(res.msg||"已提交待人工审核", "info"); loadPO(); } catch(e){ loadPO(); } }
+function renderProjectlistPreview(preview) {
+  const invalid=(preview.invalid_rows||[]).length;
+  const summary=`Projectlist 只读预览：源表已勾选 ${preview.checked_rows||0} 行、未勾选 ${preview.unchecked_rows||0} 行；当前选中 ${preview.selected_rows||0} 行，匹配 ${preview.matched_rows||0} 行，其中历史跳过 ${preview.skipped_settled||0} 行、等待数量规则 ${preview.mapping_ready||0} 行，错误 ${invalid} 行${preview.ignored_rows?`，空白业务行 ${preview.ignored_rows} 行`:""}。`;
+  const samples=(preview.preview_rows||[]).slice(0,8).map(row=>
+    `第 ${row.source_row} 行｜${row.translator_name}｜${row.project||"—"}｜${row.settlement_po_checked?"已勾选，历史跳过":"未勾选，数量规则待确认"}`
+  ).join("\n");
+  const errors=(preview.invalid_rows||[]).slice(0,20).map(row=>`第 ${row.row} 行：${row.error}`).join("\n");
+  const result=document.getElementById("poImportResult");
+  result.textContent=summary;
+  result.title=[summary,samples,errors].filter(Boolean).join("\n\n");
+  showToast(summary,"info");
+}
+async function previewProjectlistFile(input) {
+  const file=input.files&&input.files[0];
+  if(!file)return;
+  try {
+    const state=document.getElementById("projectlistPOState").value;
+    const form=new FormData();form.append("file",file);
+    const preview=await apiForm("POST",`/api/import/po?preview=true&projectlist_po_state=${encodeURIComponent(state)}`,form);
+    if(preview.source_format!=="projectlist")return failField("所选文件不是 Projectlist 格式");
+    renderProjectlistPreview(preview);
+  } finally {
+    input.value="";
+  }
+}
 async function importPOFile(input) {
   const file = input.files && input.files[0];
   if (!file) return;
-  const fd = new FormData();
-  fd.append("file", file);
+  PO_IMPORT_FILE=file;
   try {
-    const r = await fetch("/api/import/po", {method:"POST", headers:{"Authorization":"Bearer "+TOKEN}, body:fd});
-    let d = {};
-    try { d = await r.json(); } catch(e) {}
-    if (r.status===403) { showToast("只读视角，无导入权限", "error"); return; }
-    if (!r.ok) { showToast("PO 导入失败：" + (d.detail || r.status), "error"); return; }
-    const invalid = (d.invalid_rows || []).length;
-    const skipped = d.skipped_dup_po || 0;
-    const summary = `导入 ${d.imported || 0} 行，跳过重复 ${skipped} 行，错误 ${invalid} 行`;
+    const previewForm=new FormData();previewForm.append("file",file);
+    const preview=await apiForm("POST","/api/import/po?preview=true",previewForm);
+    if(preview.source_format==="projectlist"){
+      renderProjectlistPreview(preview);
+      return;
+    }
+    const samples=(preview.preview_rows||[]).slice(0,5).map(row=>`${row.translator_name||row.translator_id}｜${row.project||"—"}｜${row.expected_amount} ${row.currency}`).join("\n");
+    const previewSummary=`预览：可导入 ${preview.ready||0} 行，重复 ${preview.skipped_dup_po||0} 行，错误 ${(preview.invalid_rows||[]).length} 行\n工作表：${preview.sheet||"—"}，表头第 ${preview.header_row||"?"} 行\n\n${samples}`;
     const result = document.getElementById("poImportResult");
-    result.textContent = summary;
-    result.title = (d.invalid_rows || []).map(x => `第 ${x.row} 行：${x.error}`).join("\n");
-    showToast(summary, invalid ? "info" : "success");
-    if (invalid) console.warn("PO import invalid_rows", d.invalid_rows);
-    input.value = "";
+    result.textContent=`已预览 ${preview.ready||0} 行，等待确认`;
+    result.title=previewSummary+"\n"+(preview.invalid_rows||[]).map(x=>`第 ${x.row} 行：${x.error}`).join("\n");
+    if(!confirm(previewSummary+"\n\n确认写入以上有效行？"))return;
+    const importForm=new FormData();importForm.append("file",file);
+    const data=await apiForm("POST","/api/import/po",importForm);
+    const invalid=(data.invalid_rows||[]).length, skipped=data.skipped_dup_po||0;
+    const summary=`导入 ${data.imported||0} 行，跳过重复 ${skipped} 行，错误 ${invalid} 行`;
+    result.textContent=summary;
+    result.title=(data.invalid_rows||[]).map(x=>`${x.sheet||""} 第 ${x.row} 行：${x.error}`).join("\n");
+    showToast(summary,invalid?"info":"success");
+    if(invalid)console.warn("PO import invalid_rows",data.invalid_rows);
     document.getElementById("poMonth").innerHTML = "";
     loadPO();
   } finally {
+    PO_IMPORT_FILE=null;
     input.value = "";
   }
 }
 function openPO() {
   document.getElementById("p-translator_id").innerHTML = DATA.map(t=>`<option value="${t.id}">${esc(t.name)}</option>`).join("");
+  document.getElementById("p-id").value="";
+  document.getElementById("poModalTitle").textContent="新增 PO 结算行";
   document.getElementById("p-source_lang").value = "";
   document.getElementById("p-target_lang").value = "";
   document.getElementById("p-settlement_month").value = document.getElementById("poMonth").value || month().replace(/-\d\d$/, "-06");
-  ["p-project","p-word_count","p-rate","p-po_number","p-remarks"].forEach(i=>document.getElementById(i).value="");
+  ["p-project","p-word_count","p-rate","p-amount","p-po_number","p-remarks"].forEach(i=>document.getElementById(i).value="");
+  document.getElementById("p-pricing_mode").value="per_1000";
+  document.getElementById("p-role").value="翻译";
+  updatePOPricing();
   document.getElementById("poMask").classList.add("open");
 }
 async function fillPORate() {
   const tid = Number(document.getElementById("p-translator_id").value);
   const pair = readLangPair("p-source_lang", "p-target_lang");
-  const field = rateField(document.getElementById("p-role").value);
-  if (!tid || !pair.source_lang || !pair.target_lang || !field) return;
-  const list = await get(`/api/translators/${tid}/language-pairs`);
-  const lp = list.find(x => x.source_lang === pair.source_lang && x.target_lang === pair.target_lang);
-  if (lp && lp[field] != null) document.getElementById("p-rate").value = lp[field];
-  if (lp && lp.currency) document.getElementById("p-currency").value = lp.currency;
+  const role=document.getElementById("p-role").value;
+  if(!tid)return;
+  const params=new URLSearchParams({translator_id:String(tid),role,currency:document.getElementById("p-currency").value});
+  const project=val("p-project");if(project)params.set("project",project);
+  if(pair.source_lang)params.set("source_lang",pair.source_lang);
+  if(pair.target_lang)params.set("target_lang",pair.target_lang);
+  const matched=await get(`/api/po/price-match?${params.toString()}`);
+  if(!matched.matched)return;
+  document.getElementById("p-pricing_mode").value=matched.pricing_mode;
+  document.getElementById("p-rate").value=matched.rate??"";
+  document.getElementById("p-amount").value=matched.amount??"";
+  if(matched.currency)document.getElementById("p-currency").value=matched.currency;
+  updatePOPricing();
+  document.getElementById("p-pricing-hint").textContent+=(matched.source==="project_price"?" 已自动匹配最新项目价格，可人工修改。":" 已按语言对价格自动带入。");
+}
+function updatePOPricing() {
+  const role=document.getElementById("p-role"),mode=document.getElementById("p-pricing_mode");
+  if(!role||!mode)return;
+  if(role.value==="一口价")mode.value="fixed";
+  else if(["LQA","LQE"].includes(role.value)&&mode.value==="per_1000")mode.value="per_hour";
+  const hourly=mode.value==="per_hour", calculated=["per_1000","per_hour"].includes(mode.value);
+  document.getElementById("p-quantity-label").textContent=hourly?"小时数":"字数（字）";
+  document.getElementById("p-rate-label").textContent=hourly?"单价（/小时）":"单价（/千字）";
+  document.getElementById("p-word_count").disabled=!calculated;
+  document.getElementById("p-rate").disabled=!calculated;
+  document.getElementById("p-amount").disabled=calculated;
+  document.getElementById("p-pricing-hint").textContent={
+    per_1000:"金额 = 字数 ÷ 1000 × 单价；单价可按语言对自动取价。",
+    per_hour:"金额 = 小时数 × 小时单价。",
+    fixed:"一口价直接使用固定总额。",
+    manual:"手工金额用于明确的结算调整。",
+  }[mode.value];
 }
 async function savePO() {
   const pair = readLangPair("p-source_lang", "p-target_lang");
   const b = {translator_id:Number(document.getElementById("p-translator_id").value), settlement_month:val("p-settlement_month"),
     project:val("p-project"), source_lang:pair.source_lang, target_lang:pair.target_lang,
-    role:document.getElementById("p-role").value, word_count:num("p-word_count"), rate:num("p-rate"),
+    role:document.getElementById("p-role").value, pricing_mode:document.getElementById("p-pricing_mode").value,
+    word_count:num("p-word_count"), rate:num("p-rate"), amount:num("p-amount"),
     currency:document.getElementById("p-currency").value, status:document.getElementById("p-status").value, po_number:val("p-po_number"), remarks:val("p-remarks")};
   if (!b.translator_id || !b.settlement_month) { showToast("译员和结算月必填", "error"); return; }
   if (!validatePOForm()) return;
-  try { const res = await api("POST","/api/po", b);
+  const id=val("p-id");
+  try { const res = await api(id?"PUT":"POST",id?`/api/po/${id}`:"/api/po", b);
     if (res && res.pending) showToast(res.msg || "已提交待人工审核", "info");
     closeModal("poMask"); document.getElementById("poMonth").innerHTML=""; loadPO(); } catch(e){}
+}
+function editPO(id) {
+  const p=PO_ROWS.find(row=>row.id===id);if(!p)return;
+  document.getElementById("p-translator_id").innerHTML=DATA.map(t=>`<option value="${t.id}">${esc(t.name)}</option>`).join("");
+  document.getElementById("p-id").value=p.id;
+  document.getElementById("poModalTitle").textContent="人工修正 PO";
+  ["translator_id","settlement_month","project","source_lang","target_lang","role","pricing_mode","word_count","rate","amount","currency","status","po_number","remarks"].forEach(key=>{
+    const element=document.getElementById("p-"+key);if(element)element.value=p[key]??"";
+  });
+  updatePOPricing();
+  document.getElementById("poMask").classList.add("open");
+}
+async function showTranslatorUnpaid(translatorId) {
+  const data=await get(`/api/po/unpaid/${translatorId}`);
+  document.getElementById("unpaidTitle").textContent=`${data.translator_name} · 未结算明细`;
+  document.getElementById("unpaidSummary").innerHTML=Object.entries(data.totals||{}).map(([currency,total])=>detailMetric(`${currency} 未付`,total)).join("")||detailMetric("未付",0);
+  const rows=(data.rows||[]).map(row=>`<tr><td>${esc(row.settlement_month)}</td><td>${esc(row.project)||"—"}</td><td>${esc(row.role)||"—"}</td><td>${row.word_count??"—"}</td><td>${fmt(row.amount)} ${esc(row.currency)}</td><td>${esc(row.status)}</td></tr>`).join("");
+  document.getElementById("unpaidBody").innerHTML=tbl(["结算月","项目","角色","数量","未付金额","状态"],rows);
+  document.getElementById("unpaidMask").classList.add("open");
 }
 
 /* ---- 审计 ---- */

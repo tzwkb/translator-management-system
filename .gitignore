@@ -17,9 +17,15 @@ app.db
 *.log
 backend/data_quality_report.json
 
-# Internal materials & business docs (kept private)
+# Internal source materials (kept private)
 素材/
-docs/
+docs/**/参考资料/
+docs/**/待确认/
+docs/**/*.docx
+docs/**/*.xlsx
+docs/**/*.txt
+docs/**/*.html
+docs/**/*.png
 
 # OS
 .DS_Store
@@ -28,3 +34,5 @@ docs/
 # Local design-session runtime
 .superpowers/
 .worktrees/
+.playwright-cli/
+output/

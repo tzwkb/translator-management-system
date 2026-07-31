@@ -94,3 +94,10 @@ def require_writer(authorization: str = Header(None)):
     if role not in ("editor", "agent"):
         raise HTTPException(403, "无编辑权限")
     return role, name
+
+
+def require_authenticated(authorization: str = Header(None)):
+    role, name = parse_token(_tok(authorization))
+    if role not in ("editor", "agent", "viewer"):
+        raise HTTPException(403, "需要登录")
+    return role, name

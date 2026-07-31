@@ -17,12 +17,19 @@ Translator lifecycle, capability, rate, settlement, and risk management system f
 
 ## Current Capabilities
 
-- Translator master records with grouped detail UI.
+- Translator master records with grouped detail UI, gender, and individual/vendor type.
+- Multiple current or past project experiences per translator, with internal/external cooperation source.
 - Per-language-pair rates with fixed language-code options and free source/target combination.
-- Rate-change records, quality scores, contracts, payment info, complaints, and capacity records.
-- PO settlement with actual-character count, per-1k-character rate, status flow, summary, and pending-review guardrails.
+- Fixed-price and custom project prices, plus rate-change, quality, contract, complaint, and capacity records; quality ratings use cumulative LQE scores with an auditable manual override.
+- Monthly capacity uses translation output × 20 workdays, defaults to 2,000 units/day, and reports idle/healthy/saturated/warning thresholds.
+- Metadata-driven AND filters cover the translator record and all related business records, including typed currency-aware price ranges.
+- PO settlement supports latest project-price matching, per-1k, hourly, fixed, and manual pricing, full manual correction, unpaid detail, and monthly/cumulative summaries.
+- Projectlist supports read-only mapping preview plus checked/unchecked `结算PO` filtering; checked rows are marked as historical. Financial writes remain hard-disabled until the PO quantity rule is confirmed.
+- Translator names use stable IDs with persistent aliases. Excel rows carrying an existing translator ID overwrite that record and preserve the previous name as an alias.
+- Multiple encrypted payment accounts for WeChat, Alipay, personal bank, corporate CNY, and corporate USD; no default account is assigned, at least one information field is required, and QR codes are supported.
+- Controlled qualification-attachment upload, authenticated download, deletion, metadata, and signature checks.
 - Strict request validation for dates, months, enums, email, non-negative values, and percentage ranges.
-- Excel translator import with duplicate-email handling and invalid-row reporting.
+- Translator Excel import/export with gender, entity type, and a separate project-experience sheet; duplicate rows and validation errors are reported.
 - Standard PO/settlement Excel import with duplicate-PO skipping, invalid-row reporting, and language-pair rate lookup.
 - LQE import, audit log, role-based access control, payment masking/encryption, and agent pending-review workflow.
 - Safe agent writes with dry-run previews, idempotency keys, and active-pending content deduplication.
@@ -79,13 +86,15 @@ PYTHONPATH=backend backend/.venv/bin/python backend/tests/test_pending_idempoten
 PYTHONPATH=backend backend/.venv/bin/python backend/tests/test_migrations.py
 PYTHONPATH=backend backend/.venv/bin/python backend/tests/test_docker_startup.py
 PYTHONPATH=backend backend/.venv/bin/python backend/tests/test_schema_validation.py
+PYTHONPATH=backend backend/.venv/bin/python backend/tests/test_quality_rating.py
+PYTHONPATH=backend backend/.venv/bin/python backend/tests/test_capacity_thresholds.py
 for f in frontend/tests/*.mjs; do node "$f" || exit 1; done
 backend/.venv/bin/python -m compileall backend/app backend/tests translator-mgmt-agent
 python3 translator-mgmt-agent/test_client_payloads.py
 git diff --check
 ```
 
-Current acceptance baseline: `71/71`.
+Current acceptance baseline: `142/142`; LQE-rating boundaries `13/13`; monthly-capacity thresholds `6/6`; eleven frontend static test scripts.
 
 ## Remaining Work
 
