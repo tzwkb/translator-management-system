@@ -10,8 +10,9 @@ MONTH_RE = re.compile(r"^\d{4}-\d{2}$")
 EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 
 Currency = Literal["CNY", "USD", "EUR"]
-TaskType = Literal["翻译", "审校", "MTPE", "LQA", "LQE", "其他"]
+TaskType = Literal["翻译", "审校", "MTPE", "LQA", "LQE", "一口价", "其他"]
 POStatus = Literal["未开票", "已开票待付", "已支付", "有争议"]
+PricingMode = Literal["per_1000", "per_hour", "fixed", "manual"]
 
 
 def _blank(v: Any):
@@ -77,7 +78,7 @@ class TranslatorIn(BaseModel):
     timezone: Optional[str] = None
     status: Literal["Active", "Dormant", "Blacklisted", "Probation"] = "Active"
     source: Optional[str] = None
-    gender: Optional[Literal["male", "female", "undisclosed"]] = None
+    gender: Literal["male", "female"]
     entity_type: Optional[Literal["individual", "vendor"]] = None
     language_pairs: Optional[str] = None
     translation_rate: Optional[float] = None
@@ -88,15 +89,18 @@ class TranslatorIn(BaseModel):
     domains: Optional[str] = None
     text_types: Optional[str] = None
     cat_tools: Optional[str] = None
-    internal_rating: Optional[Literal["S", "A", "B", "C", "D"]] = None
+    internal_rating: Optional[Literal["S", "A", "A-", "B", "C", "D"]] = None
+    manual_rating: Optional[Literal["S", "A", "A-", "B", "C", "D"]] = None
+    manual_rating_reason: Optional[str] = None
     trial_result: Optional[Literal["Pass", "Fail", "Pending"]] = None
     current_project: Optional[str] = None
     role: Optional[TaskType] = None
     daily_output: Optional[int] = None
     weekend_off: Optional[bool] = None
-    availability: Optional[Literal["空闲", "部分空闲", "满负荷"]] = None
+    availability: Optional[Literal["空闲", "健康", "饱和", "警告"]] = None
     currency: Optional[Currency] = None
     payment_method: Optional[str] = None
+    settlement_mode: Literal["monthly", "cumulative"] = "monthly"
     invoice_type: Optional[str] = None
     tax_deduction: Optional[str] = None
     contract_status: Optional[Literal["有效", "即将到期", "已过期", "无合同"]] = None
@@ -126,6 +130,11 @@ class TranslatorIn(BaseModel):
             raise ValueError("邮箱格式不正确")
         return v
 
+    @field_validator("manual_rating_reason", mode="before")
+    @classmethod
+    def normalize_manual_rating_reason(cls, v):
+        return _blank(v)
+
     @field_validator("translation_rate", "mtpe_rate", "review_rate", "lqa_rate", "daily_output")
     @classmethod
     def non_negative_numbers(cls, v):
@@ -135,6 +144,21 @@ class TranslatorIn(BaseModel):
     @classmethod
     def valid_punctuality(cls, v):
         return _percent(v)
+
+
+class TranslatorAliasIn(BaseModel):
+    alias: str
+
+    @field_validator("alias", mode="before")
+    @classmethod
+    def valid_alias(cls, v):
+        value = _blank(v)
+        if value is None:
+            raise ValueError("名称映射不能为空")
+        value = str(value)
+        if len(value) > 200:
+            raise ValueError("名称映射不能超过 200 个字符")
+        return value
 
 
 class ProjectExperienceIn(BaseModel):
@@ -216,9 +240,14 @@ class POIn(BaseModel):
     role: Optional[TaskType] = None
     word_count: Optional[float] = None
     rate: Optional[float] = None
+    amount: Optional[float] = None
+    pricing_mode: PricingMode = "per_1000"
     currency: Currency = "CNY"
     status: POStatus = "未开票"
     po_number: Optional[str] = None
+    source_key: Optional[str] = None
+    source_name: Optional[str] = None
+    source_row: Optional[int] = None
     remarks: Optional[str] = None
 
     @field_validator("settlement_month", mode="before")
@@ -226,10 +255,18 @@ class POIn(BaseModel):
     def valid_settlement_month(cls, v):
         return _month(v, required=True)
 
-    @field_validator("word_count", "rate")
+    @field_validator("word_count", "rate", "amount")
     @classmethod
     def valid_amount_fields(cls, v):
         return _non_negative(v)
+
+    @model_validator(mode="after")
+    def valid_pricing(self):
+        if self.pricing_mode == "manual" and self.amount is None:
+            raise ValueError("手工计价必须填写金额")
+        if self.pricing_mode == "fixed" and self.amount is None and self.rate is None:
+            raise ValueError("一口价必须填写固定金额")
+        return self
 
 
 class StatusIn(BaseModel):
@@ -258,6 +295,50 @@ class LanguagePairIn(BaseModel):
         return _non_negative(v)
 
 
+class ProjectPriceIn(BaseModel):
+    project_experience_id: Optional[int] = None
+    project_name: str
+    source_lang: Optional[str] = None
+    target_lang: Optional[str] = None
+    price_type: Literal["fixed", "custom"]
+    task_type: Optional[TaskType] = None
+    custom_task_name: Optional[str] = None
+    amount: float
+    unit: Literal["project", "task", "hour", "word", "per_1000", "other"]
+    currency: Currency
+    remarks: Optional[str] = None
+
+    @field_validator("project_name", mode="before")
+    @classmethod
+    def valid_project_name(cls, v):
+        v = _blank(v)
+        if v is None:
+            raise ValueError("项目名称必填")
+        return v
+
+    @field_validator("custom_task_name", "remarks", mode="before")
+    @classmethod
+    def normalize_optional_text(cls, v):
+        return _blank(v)
+
+    @field_validator("amount")
+    @classmethod
+    def valid_amount(cls, v):
+        return _non_negative(v)
+
+    @model_validator(mode="after")
+    def valid_price_type(self):
+        if bool(self.source_lang) != bool(self.target_lang):
+            raise ValueError("语言对需同时选择源语言和目标语言")
+        if self.price_type == "fixed":
+            self.task_type = "一口价"
+            if self.unit not in {"project", "task"}:
+                raise ValueError("一口价单位只能是项目或任务")
+        elif not self.custom_task_name:
+            raise ValueError("其他价格必须填写自定义任务名称")
+        return self
+
+
 class ContractIn(BaseModel):
     contract_number: Optional[str] = None
     contract_type: Optional[Literal["框架协议", "单项目合同", "试用合同", "兼职协议"]] = None
@@ -282,6 +363,8 @@ class QualityIn(BaseModel):
     critical_errors: int = 0
     major_errors: int = 0
     minor_errors: int = 0
+    is_qualified: Optional[bool] = None
+    failure_reason: Optional[str] = None
     reviewer: Optional[str] = None
     feedback_notes: Optional[str] = None
 
@@ -299,6 +382,11 @@ class QualityIn(BaseModel):
     @classmethod
     def valid_error_counts(cls, v):
         return _non_negative(v)
+
+    @field_validator("failure_reason", mode="before")
+    @classmethod
+    def normalize_failure_reason(cls, v):
+        return _blank(v)
 
 
 class ComplaintIn(BaseModel):
@@ -363,6 +451,39 @@ class PaymentIn(BaseModel):
     payee_name: Optional[str] = None
     supports_wechat: bool = False
     remarks: Optional[str] = None
+
+
+class PaymentAccountIn(BaseModel):
+    method: Literal[
+        "wechat", "alipay", "personal_bank", "corporate_cny", "corporate_usd"
+    ]
+    currency: Optional[Currency] = None
+    account_name: Optional[str] = None
+    account_number: Optional[str] = None
+    bank_name: Optional[str] = None
+    bank_address: Optional[str] = None
+    swift_code: Optional[str] = None
+    routing_code: Optional[str] = None
+    tax_id: Optional[str] = None
+    is_default: bool = False
+    remarks: Optional[str] = None
+
+    @field_validator(
+        "account_name", "account_number", "bank_name", "bank_address",
+        "swift_code", "routing_code", "tax_id", "remarks", mode="before",
+    )
+    @classmethod
+    def normalize_text(cls, v):
+        return _blank(v)
+
+    @model_validator(mode="after")
+    def normalize_currency(self):
+        expected = "USD" if self.method == "corporate_usd" else "CNY"
+        if self.currency and self.currency != expected:
+            raise ValueError(f"该支付方式币种必须为 {expected}")
+        self.currency = expected
+        self.is_default = False
+        return self
 
 
 class LoginIn(BaseModel):

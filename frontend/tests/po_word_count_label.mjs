@@ -4,8 +4,12 @@ import fs from "node:fs";
 const html = fs.readFileSync(new URL("../index.html", import.meta.url), "utf8");
 
 assert.doesNotMatch(html, /字数\(千\)/);
-assert.match(html, /<th>字数（字）<\/th>/);
-assert.match(html, /<th>单价（\/千字）<\/th>/);
-assert.match(html, /金额 = 字数（字）÷ 1000 × 单价（\/千字）/);
+assert.match(html, /<th>计价<\/th><th>数量<\/th><th>单价<\/th>/);
+assert.match(html, /id="p-quantity-label">字数（字）/);
+assert.match(html, /id="p-rate-label">单价（\/千字）/);
+assert.match(html, /per_1000:"金额 = 字数 ÷ 1000 × 单价/);
+assert.match(html, /per_hour:"金额 = 小时数 × 小时单价/);
+assert.match(html, /fixed:"一口价直接使用固定总额/);
+assert.match(html, /manual:"手工金额用于明确的结算调整/);
 
-console.log("PO word count label uses actual-character unit");
+console.log("PO pricing labels follow the selected pricing mode");

@@ -41,6 +41,8 @@ class Translator(Base):
     text_types: Mapped[Optional[str]] = mapped_column(Text)
     cat_tools: Mapped[Optional[str]] = mapped_column(Text)
     internal_rating: Mapped[Optional[str]] = mapped_column(String(20))
+    manual_rating: Mapped[Optional[str]] = mapped_column(String(20))
+    manual_rating_reason: Mapped[Optional[str]] = mapped_column(Text)
     # 质量数据（由质量联动自动更新）
     trial_result: Mapped[Optional[str]] = mapped_column(String(50))
     recent_qa_score: Mapped[Optional[float]] = mapped_column(Numeric(5, 2))
@@ -57,6 +59,9 @@ class Translator(Base):
     # 财务信息
     currency: Mapped[Optional[str]] = mapped_column(String(10))
     payment_method: Mapped[Optional[str]] = mapped_column(String(50))
+    settlement_mode: Mapped[str] = mapped_column(
+        String(20), default="monthly", server_default=text("'monthly'"),
+    )
     invoice_type: Mapped[Optional[str]] = mapped_column(String(50))
     tax_deduction: Mapped[Optional[str]] = mapped_column(String(50))
     cumulative_unpaid: Mapped[float] = mapped_column(Numeric(12, 2), default=0)
@@ -85,13 +90,14 @@ class Translator(Base):
                 "onboarding_date", "status", "source", "gender", "entity_type",
                 "translation_rate",
                 "mtpe_rate", "review_rate", "lqa_rate", "rate_confirmed_date", "domains",
-                "text_types", "cat_tools", "internal_rating", "trial_result", "current_project",
+                "text_types", "cat_tools", "manual_rating", "manual_rating_reason",
+                "trial_result", "current_project",
                 "role", "daily_output", "weekend_off", "availability", "currency",
-                "payment_method", "invoice_type", "tax_deduction", "contract_status",
+                "payment_method", "settlement_mode", "invoice_type", "tax_deduction", "contract_status",
                 "contract_expiry", "nda_signed", "punctuality_rate", "responsiveness",
                 "cooperation_rating", "last_contact", "remarks")
     # 系统自动算字段（联动维护，只读）
-    DERIVED = ("recent_qa_score", "cumulative_qa_score", "low_error_count", "low_error_rate",
+    DERIVED = ("internal_rating", "recent_qa_score", "cumulative_qa_score", "low_error_count", "low_error_rate",
                "complaint_count", "deduction_total", "negotiation_status", "last_negotiation_date",
                "post_negotiation_rate", "rate_reduction_pct", "accepted_reduction",
                "negotiation_notes", "cumulative_unpaid", "cumulative_word_count", "language_pairs")
@@ -107,14 +113,18 @@ class Translator(Base):
             "mtpe_rate": _f(self.mtpe_rate), "review_rate": _f(self.review_rate),
             "lqa_rate": _f(self.lqa_rate), "rate_confirmed_date": self.rate_confirmed_date,
             "domains": self.domains, "text_types": self.text_types, "cat_tools": self.cat_tools,
-            "internal_rating": self.internal_rating, "trial_result": self.trial_result,
+            "internal_rating": self.internal_rating, "manual_rating": self.manual_rating,
+            "manual_rating_reason": self.manual_rating_reason,
+            "trial_result": self.trial_result,
             "recent_qa_score": _f(self.recent_qa_score),
             "cumulative_qa_score": _f(self.cumulative_qa_score),
             "low_error_count": self.low_error_count, "low_error_rate": _f(self.low_error_rate),
             "current_project": self.current_project, "role": self.role,
+            "current_projects": getattr(self, "_cached_current_projects", []),
             "daily_output": self.daily_output, "weekend_off": self.weekend_off,
             "availability": self.availability, "cumulative_word_count": self.cumulative_word_count,
             "currency": self.currency, "payment_method": self.payment_method,
+            "settlement_mode": self.settlement_mode,
             "invoice_type": self.invoice_type, "tax_deduction": self.tax_deduction,
             "cumulative_unpaid": _f(self.cumulative_unpaid), "contract_status": self.contract_status,
             "contract_expiry": self.contract_expiry, "nda_signed": self.nda_signed,
@@ -127,6 +137,39 @@ class Translator(Base):
             "complaint_count": self.complaint_count, "deduction_total": _f(self.deduction_total),
             "cooperation_rating": self.cooperation_rating, "last_contact": self.last_contact,
             "remarks": self.remarks,
+            "computed_availability": getattr(self, "_computed_availability", None),
+            "computed_load_pct": getattr(self, "_computed_load_pct", None),
+            "availability_conflict": getattr(self, "_availability_conflict", False),
+            "availability_basis": getattr(self, "_availability_basis", []),
+            "aliases": getattr(self, "_cached_aliases", []),
+        }
+
+
+class TranslatorAlias(Base):
+    __tablename__ = "translator_aliases"
+    __table_args__ = (
+        UniqueConstraint(
+            "normalized_alias",
+            name="uq_translator_aliases_normalized_alias",
+        ),
+    )
+    id: Mapped[int] = mapped_column(primary_key=True)
+    translator_id: Mapped[int] = mapped_column(
+        ForeignKey("translators.id"),
+        index=True,
+    )
+    alias: Mapped[str] = mapped_column(String(200))
+    normalized_alias: Mapped[str] = mapped_column(String(200))
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
+
+    def as_dict(self):
+        return {
+            "id": self.id,
+            "translator_id": self.translator_id,
+            "alias": self.alias,
+            "normalized_alias": self.normalized_alias,
+            "created_at": self.created_at.strftime("%Y-%m-%d %H:%M:%S")
+            if self.created_at else None,
         }
 
 
@@ -206,6 +249,12 @@ class PO(Base):
     currency: Mapped[str] = mapped_column(String(10), default="CNY")
     status: Mapped[str] = mapped_column(String(20), default="未开票", index=True)
     po_number: Mapped[Optional[str]] = mapped_column(String(50))
+    pricing_mode: Mapped[str] = mapped_column(
+        String(20), default="per_1000", server_default=text("'per_1000'"),
+    )
+    source_key: Mapped[Optional[str]] = mapped_column(String(64), unique=True, index=True)
+    source_name: Mapped[Optional[str]] = mapped_column(String(255))
+    source_row: Mapped[Optional[int]] = mapped_column(Integer)
     remarks: Mapped[Optional[str]] = mapped_column(Text)
 
     def as_dict(self):
@@ -214,6 +263,8 @@ class PO(Base):
                 "source_lang": self.source_lang, "target_lang": self.target_lang,
                 "word_count": _f(self.word_count), "rate": _f(self.rate), "amount": _f(self.amount),
                 "currency": self.currency, "status": self.status, "po_number": self.po_number,
+                "pricing_mode": self.pricing_mode, "source_key": self.source_key,
+                "source_name": self.source_name, "source_row": self.source_row,
                 "remarks": self.remarks}
 
 
@@ -249,6 +300,8 @@ class QualityScore(Base):
     critical_errors: Mapped[int] = mapped_column(Integer, default=0)
     major_errors: Mapped[int] = mapped_column(Integer, default=0)
     minor_errors: Mapped[int] = mapped_column(Integer, default=0)
+    is_qualified: Mapped[Optional[bool]] = mapped_column(Boolean)
+    failure_reason: Mapped[Optional[str]] = mapped_column(Text)
     reviewer: Mapped[Optional[str]] = mapped_column(String(100))
     feedback_notes: Mapped[Optional[str]] = mapped_column(Text)
 
@@ -257,7 +310,8 @@ class QualityScore(Base):
                 "evaluation_period": self.evaluation_period, "project": self.project,
                 "qa_type": self.qa_type, "score": _f(self.score),
                 "critical_errors": self.critical_errors, "major_errors": self.major_errors,
-                "minor_errors": self.minor_errors, "reviewer": self.reviewer,
+                "minor_errors": self.minor_errors, "is_qualified": self.is_qualified,
+                "failure_reason": self.failure_reason, "reviewer": self.reviewer,
                 "feedback_notes": self.feedback_notes}
 
 
@@ -319,6 +373,47 @@ class PaymentInfo(Base):
                 "remarks": self.remarks}
 
 
+class PaymentAccount(Base):
+    __tablename__ = "payment_accounts"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    translator_id: Mapped[int] = mapped_column(ForeignKey("translators.id"), index=True)
+    method: Mapped[str] = mapped_column(String(30), index=True)
+    currency: Mapped[Optional[str]] = mapped_column(String(10))
+    account_name: Mapped[Optional[str]] = mapped_column(String(100))
+    account_number_enc: Mapped[Optional[bytes]] = mapped_column(LargeBinary)
+    bank_name: Mapped[Optional[str]] = mapped_column(String(200))
+    bank_address: Mapped[Optional[str]] = mapped_column(String(300))
+    swift_code: Mapped[Optional[str]] = mapped_column(String(50))
+    routing_code: Mapped[Optional[str]] = mapped_column(String(50))
+    tax_id_enc: Mapped[Optional[bytes]] = mapped_column(LargeBinary)
+    qr_stored_name: Mapped[Optional[str]] = mapped_column(String(120))
+    qr_original_name: Mapped[Optional[str]] = mapped_column(String(255))
+    qr_mime: Mapped[Optional[str]] = mapped_column(String(100))
+    is_default: Mapped[bool] = mapped_column(Boolean, default=False)
+    remarks: Mapped[Optional[str]] = mapped_column(Text)
+
+    def as_dict(self, reveal=False):
+        account_number = dec(self.account_number_enc)
+        tax_id = dec(self.tax_id_enc)
+        return {
+            "id": self.id,
+            "translator_id": self.translator_id,
+            "method": self.method,
+            "currency": self.currency,
+            "account_name": self.account_name,
+            "account_number": account_number if reveal else mask(account_number),
+            "bank_name": self.bank_name,
+            "bank_address": self.bank_address,
+            "swift_code": self.swift_code,
+            "routing_code": self.routing_code,
+            "tax_id": tax_id if reveal else mask(tax_id),
+            "has_qr": bool(self.qr_stored_name),
+            "qr_original_name": self.qr_original_name,
+            "is_default": self.is_default,
+            "remarks": self.remarks,
+        }
+
+
 class LanguagePair(Base):
     __tablename__ = "language_pairs"
     id: Mapped[int] = mapped_column(primary_key=True)
@@ -340,6 +435,68 @@ class LanguagePair(Base):
                 "review_rate": _f(self.review_rate), "lqa_rate": _f(self.lqa_rate),
                 "lqe_rate": _f(self.lqe_rate), "currency": self.currency,
                 "rate_confirmed_date": self.rate_confirmed_date}
+
+
+class ProjectPrice(Base):
+    __tablename__ = "project_prices"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    translator_id: Mapped[int] = mapped_column(ForeignKey("translators.id"), index=True)
+    project_experience_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("translator_project_experiences.id")
+    )
+    project_name: Mapped[str] = mapped_column(String(200))
+    source_lang: Mapped[Optional[str]] = mapped_column(String(20))
+    target_lang: Mapped[Optional[str]] = mapped_column(String(20))
+    price_type: Mapped[str] = mapped_column(String(20), index=True)
+    task_type: Mapped[Optional[str]] = mapped_column(String(50))
+    custom_task_name: Mapped[Optional[str]] = mapped_column(String(100))
+    amount: Mapped[float] = mapped_column(Numeric(12, 2))
+    unit: Mapped[str] = mapped_column(String(30))
+    currency: Mapped[str] = mapped_column(String(10))
+    remarks: Mapped[Optional[str]] = mapped_column(Text)
+
+    def as_dict(self):
+        return {
+            "id": self.id,
+            "translator_id": self.translator_id,
+            "project_experience_id": self.project_experience_id,
+            "project_name": self.project_name,
+            "source_lang": self.source_lang,
+            "target_lang": self.target_lang,
+            "price_type": self.price_type,
+            "task_type": self.task_type,
+            "custom_task_name": self.custom_task_name,
+            "amount": _f(self.amount),
+            "unit": self.unit,
+            "currency": self.currency,
+            "remarks": self.remarks,
+        }
+
+
+class TranslatorAttachment(Base):
+    __tablename__ = "translator_attachments"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    translator_id: Mapped[int] = mapped_column(ForeignKey("translators.id"), index=True)
+    category: Mapped[str] = mapped_column(String(30), index=True)
+    original_name: Mapped[str] = mapped_column(String(255))
+    stored_name: Mapped[str] = mapped_column(String(120), unique=True)
+    mime_type: Mapped[str] = mapped_column(String(100))
+    size_bytes: Mapped[int] = mapped_column(BigInteger)
+    sha256: Mapped[str] = mapped_column(String(64))
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
+
+    def as_dict(self):
+        return {
+            "id": self.id,
+            "translator_id": self.translator_id,
+            "category": self.category,
+            "original_name": self.original_name,
+            "mime_type": self.mime_type,
+            "size_bytes": self.size_bytes,
+            "sha256": self.sha256,
+            "created_at": self.created_at.strftime("%Y-%m-%d %H:%M:%S")
+            if self.created_at else None,
+        }
 
 
 class AuditLog(Base):

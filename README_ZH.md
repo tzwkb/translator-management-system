@@ -20,10 +20,16 @@
 - 译员主表与分组详情页，支持性别、个人/供应商类型。
 - 一个译员可维护多条当前或过往项目经历，区分我司与外部合作。
 - 语言对独立费率：固定语言代码选项，每一边可自由组合，支持 ZH→KO、EN→JA 等。
-- 报价变更、质量记分、合同、支付信息、客诉、产能、PO、待审、审计日志。
-- PO 结算按实际字数入库，金额口径为 `字数 / 1000 * 单价`。
+- 一口价和自定义项目价格，以及报价变更、质量记分、合同、客诉和产能台账；质量等级按累计 LQE 均分生成，并允许记录原因的人工例外评级。
+- 月度产能按翻译日产能 × 20 个工作日计算，默认 2000 字/日；状态为 `<50%` 空闲、`50%–<80%` 健康、`80%–100%` 饱和、`>100%` 警告。
+- 译员主表和所有业务子表字段均可动态 AND 组合筛选，价格支持类型、币种和区间约束。
+- PO 支持最新项目价格自动匹配、按千字、按小时、一口价和手工金额、完整人工修正、未结算明细，以及当月与跨月累计未付。
+- Projectlist 已开放只读映射预览及“结算PO”已勾选/未勾选筛选；已勾选行标记为历史记录。PO 数量真实性规则确认前，财务写入保持硬关闭。
+- 译员通过稳定 ID 关联持久名称映射；Excel 携带已有译员 ID 时覆盖原记录，并自动把旧姓名保存为名称映射。
+- 微信、支付宝、个人银行卡、对公人民币、对公美元多支付账户；不设默认账户，各字段可空但至少填写一项，敏感字段加密脱敏并支持收款码。
+- 资质附件受控上传、登录下载、删除、元数据和文件签名校验。
 - 字段格式验证：真实日期、真实月份、枚举、邮箱、非负数、百分比范围等。
-- Excel 译员导入：按邮箱去重，非法行跳过并返回 `invalid_rows`。
+- Excel 译员导入导出：按邮箱去重，支持性别、主体类型及独立“项目经历”工作表，非法行返回明细。
 - 标准 PO / 结算 Excel 导入：支持重复 PO 跳过、错误行报告、语言对自动取价。
 - LQE 导入、加密脱敏、RBAC、agent 钱相关待审护栏。
 - Agent 写入安全：支持 dry-run、幂等键和活动待审内容防重。
@@ -103,13 +109,15 @@ PYTHONPATH=backend backend/.venv/bin/python backend/tests/test_pending_idempoten
 PYTHONPATH=backend backend/.venv/bin/python backend/tests/test_migrations.py
 PYTHONPATH=backend backend/.venv/bin/python backend/tests/test_docker_startup.py
 PYTHONPATH=backend backend/.venv/bin/python backend/tests/test_schema_validation.py
+PYTHONPATH=backend backend/.venv/bin/python backend/tests/test_quality_rating.py
+PYTHONPATH=backend backend/.venv/bin/python backend/tests/test_capacity_thresholds.py
 for f in frontend/tests/*.mjs; do node "$f" || exit 1; done
 backend/.venv/bin/python -m compileall backend/app backend/tests translator-mgmt-agent
 python3 translator-mgmt-agent/test_client_payloads.py
 git diff --check
 ```
 
-当前验收基线：`88/88`。
+当前验收基线：`142/142`；LQE 评级边界 `13/13`；月度产能阈值 `6/6`；前端静态测试 11 个脚本。
 
 ## 后续重点
 

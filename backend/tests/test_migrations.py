@@ -6,17 +6,22 @@ import sys
 import tempfile
 from pathlib import Path
 
-from sqlalchemy import create_engine, inspect, text
+from sqlalchemy import create_engine, inspect, select, text
 from sqlalchemy.orm import Session
 
-from app.models import Base, Translator
+from app.models import (
+    Base,
+    Translator,
+    TranslatorAlias,
+    TranslatorProjectExperience,
+)
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 BACKEND_DIR = PROJECT_ROOT / "backend"
 ALEMBIC_CONFIG = BACKEND_DIR / "alembic.ini"
 INITIAL_REVISION = "20260717_0001"
-HEAD_REVISION = "20260724_0002"
+HEAD_REVISION = "20260731_0006"
 EXPECTED_TABLES = {
     "audit_logs",
     "capacity_allocations",
@@ -24,12 +29,16 @@ EXPECTED_TABLES = {
     "contracts",
     "language_pairs",
     "payment_infos",
+    "payment_accounts",
     "pending_changes",
     "pending_idempotency",
     "po_settlements",
+    "project_prices",
     "quality_scores",
     "rate_changes",
     "translator_project_experiences",
+    "translator_aliases",
+    "translator_attachments",
     "translators",
 }
 
@@ -58,11 +67,40 @@ def assert_ok(result):
 
 def assert_profile_schema(engine):
     inspector = inspect(engine)
+    alias_columns = {
+        item["name"]: item
+        for item in inspector.get_columns("translator_aliases")
+    }
+    assert set(alias_columns) == {
+        "id", "translator_id", "alias", "normalized_alias", "created_at",
+    }
+    assert all(not item["nullable"] for item in alias_columns.values())
+    alias_indexes = {
+        item["name"] for item in inspector.get_indexes("translator_aliases")
+    }
+    assert alias_indexes == {"ix_translator_aliases_translator_id"}
+    alias_unique = {
+        item["name"]: item
+        for item in inspector.get_unique_constraints("translator_aliases")
+    }
+    assert alias_unique["uq_translator_aliases_normalized_alias"][
+        "column_names"
+    ] == ["normalized_alias"]
+    alias_foreign_keys = inspector.get_foreign_keys("translator_aliases")
+    assert any(
+        key["constrained_columns"] == ["translator_id"]
+        and key["referred_table"] == "translators"
+        and key["referred_columns"] == ["id"]
+        for key in alias_foreign_keys
+    )
+
     translator_columns = {
         item["name"]: item for item in inspector.get_columns("translators")
     }
     assert translator_columns["gender"]["nullable"]
     assert translator_columns["entity_type"]["nullable"]
+    assert not translator_columns["settlement_mode"]["nullable"]
+    assert {"manual_rating", "manual_rating_reason"} <= set(translator_columns)
 
     experience_columns = {
         item["name"]: item
@@ -107,6 +145,54 @@ def assert_profile_schema(engine):
         "ix_translator_project_experiences_project_status",
         "ix_translator_project_experiences_translator_id",
     }
+
+    po_columns = {
+        item["name"]: item for item in inspector.get_columns("po_settlements")
+    }
+    assert {"pricing_mode", "source_key", "source_name", "source_row"} <= set(po_columns)
+    assert not po_columns["pricing_mode"]["nullable"]
+    po_indexes = {
+        item["name"]: item for item in inspector.get_indexes("po_settlements")
+    }
+    assert po_indexes["ix_po_settlements_source_key"]["unique"]
+
+    project_price_columns = {
+        item["name"] for item in inspector.get_columns("project_prices")
+    }
+    assert {
+        "id", "translator_id", "project_experience_id", "project_name",
+        "source_lang", "target_lang", "price_type", "task_type",
+        "custom_task_name", "amount", "unit", "currency", "remarks",
+    } == project_price_columns
+
+    payment_column_rows = {
+        item["name"]: item for item in inspector.get_columns("payment_accounts")
+    }
+    payment_columns = set(payment_column_rows)
+    assert {
+        "id", "translator_id", "method", "currency", "account_name",
+        "account_number_enc", "bank_name", "bank_address", "swift_code",
+        "routing_code", "tax_id_enc", "qr_stored_name", "qr_original_name",
+        "qr_mime", "is_default", "remarks",
+    } == payment_columns
+    assert payment_column_rows["account_name"]["nullable"]
+    payment_indexes = {
+        item["name"]: item for item in inspector.get_indexes("payment_accounts")
+    }
+    assert "ux_payment_accounts_default" not in payment_indexes
+
+    quality_columns = {
+        item["name"] for item in inspector.get_columns("quality_scores")
+    }
+    assert {"is_qualified", "failure_reason"} <= quality_columns
+
+    attachment_columns = {
+        item["name"] for item in inspector.get_columns("translator_attachments")
+    }
+    assert {
+        "id", "translator_id", "category", "original_name", "stored_name",
+        "mime_type", "size_bytes", "sha256", "created_at",
+    } == attachment_columns
 
 
 def check_empty_database_upgrade(tmpdir):
@@ -181,9 +267,15 @@ def check_initial_revision_upgrade_round_trip(tmpdir):
             FROM translators WHERE id = 7
         """)).one()
         assert tuple(row) == ("保留数据", None, None)
-        assert conn.scalar(
-            text("SELECT COUNT(*) FROM translator_project_experiences")
-        ) == 0
+        project = conn.execute(text("""
+            SELECT translator_id, cooperation_source, project_status,
+                   project_name, role, remarks
+            FROM translator_project_experiences
+        """)).one()
+        assert tuple(project) == (
+            7, "our_company", "current", "旧当前项目", "翻译",
+            "由旧版当前项目字段迁移",
+        )
         assert conn.scalar(text("PRAGMA integrity_check")) == "ok"
         assert conn.scalar(text("SELECT version_num FROM alembic_version")) == HEAD_REVISION
     with Session(engine) as session:
@@ -192,6 +284,24 @@ def check_initial_revision_upgrade_round_trip(tmpdir):
         assert translator.gender is None
         assert translator.entity_type is None
         assert translator.as_dict()["current_project"] == "旧当前项目"
+        session.add(TranslatorAlias(
+            translator_id=7,
+            alias="Legacy Name",
+            normalized_alias="legacy name",
+        ))
+        session.commit()
+        assert session.scalar(
+            select(TranslatorAlias).where(
+                TranslatorAlias.translator_id == 7
+            )
+        ).alias == "Legacy Name"
+        project = session.scalar(
+            select(TranslatorProjectExperience).where(
+                TranslatorProjectExperience.translator_id == 7
+            )
+        )
+        assert project is not None
+        assert project.project_name == "旧当前项目"
 
     result = run(
         "-m",

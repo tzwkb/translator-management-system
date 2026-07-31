@@ -14,11 +14,13 @@ import subprocess
 import sys
 import tempfile
 import time
+from datetime import date, timedelta
 from pathlib import Path
+from urllib.parse import urlencode
 import urllib.error
 import urllib.request
 
-from openpyxl import Workbook
+from openpyxl import Workbook, load_workbook
 
 BASE = os.getenv("BASE")
 OP = urllib.request.build_opener(urllib.request.ProxyHandler({}))
@@ -60,11 +62,40 @@ def mk_xlsx(rows):
     return b.getvalue()
 
 
+def mk_xlsx_sheets(sheets):
+    wb = Workbook()
+    for index, (title, rows) in enumerate(sheets.items()):
+        ws = wb.active if index == 0 else wb.create_sheet()
+        ws.title = title
+        for row in rows:
+            ws.append(row)
+    b = io.BytesIO()
+    wb.save(b)
+    return b.getvalue()
+
+
 def mp(xb):
     bd = "--x"
     head = (f"--{bd}\r\nContent-Disposition: form-data; name=\"file\"; "
             f"filename=\"x.xlsx\"\r\nContent-Type: application/octet-stream\r\n\r\n").encode()
     return head + xb + f"\r\n--{bd}--\r\n".encode(), f"multipart/form-data; boundary={bd}"
+
+
+def mp_file(data, filename, content_type, fields=None):
+    boundary = "acceptance-boundary"
+    parts = []
+    for key, value in (fields or {}).items():
+        parts.append(
+            f"--{boundary}\r\nContent-Disposition: form-data; name=\"{key}\"\r\n\r\n"
+            f"{value}\r\n".encode()
+        )
+    parts.append(
+        f"--{boundary}\r\nContent-Disposition: form-data; name=\"file\"; "
+        f"filename=\"{filename}\"\r\nContent-Type: {content_type}\r\n\r\n".encode()
+        + data + b"\r\n"
+    )
+    parts.append(f"--{boundary}--\r\n".encode())
+    return b"".join(parts), f"multipart/form-data; boundary={boundary}"
 
 
 def free_port():
@@ -102,6 +133,7 @@ def start_isolated_server():
     env["JWT_SECRET"] = "acceptance-test-secret"
     env["AES_KEY"] = "0" * 64
     env["TOKEN_TTL"] = "3600"
+    env["UPLOAD_DIR"] = str(Path(TMPDIR.name) / "uploads")
     migration = subprocess.run(
         [sys.executable, "-m", "alembic", "-c", "alembic.ini", "upgrade", "head"],
         cwd=backend_dir,
@@ -184,18 +216,92 @@ def main():
     print("=== C PRD 硬规则 ===")
     dup_email = f"dup{run_tag}@x.com"
     new_email = f"new{run_tag}@x.com"
-    req("POST", "/api/translators", {"name": "唯A", "email": dup_email, "native_language": "中文", "onboarding_date": "2025-01-01"}, token=ET)
-    chk("create重复邮箱400", code(lambda: req("POST", "/api/translators", {"name": "唯B", "email": dup_email, "native_language": "中文", "onboarding_date": "2025-01-01"}, token=ET)) == 400)
-    chk("update改成已存在邮箱400", code(lambda: req("PUT", "/api/translators/1", {"name": "张明", "email": dup_email, "native_language": "中文", "onboarding_date": "2025-01-01"}, token=ET)) == 400)
+    req("POST", "/api/translators", {"name": "唯A", "email": dup_email, "native_language": "中文", "onboarding_date": "2025-01-01", "gender": "female"}, token=ET)
+    chk("create重复邮箱400", code(lambda: req("POST", "/api/translators", {"name": "唯B", "email": dup_email, "native_language": "中文", "onboarding_date": "2025-01-01", "gender": "female"}, token=ET)) == 400)
+    chk("update改成已存在邮箱400", code(lambda: req("PUT", "/api/translators/1", {"name": "张明", "email": dup_email, "native_language": "中文", "onboarding_date": "2025-01-01", "gender": "male"}, token=ET)) == 400)
     imp_raw, imp_ct = mp(mk_xlsx([
-        ["name", "email", "native_language", "onboarding_date"],
-        ["导入新", new_email, "中文", "2025-01-01"],
-        ["导入重", dup_email, "中文", "2025-01-01"],
-        ["导入坏", f"bad{run_tag}@x.com", "中文", "2025-01-32"],
+        ["name", "email", "native_language", "onboarding_date", "性别", "主体类型", "内部评级"],
+        ["导入新", new_email, "中文", "2025-01-01", "女", "个人译员", "S"],
+        ["导入重", dup_email, "中文", "2025-01-01", "女"],
+        ["导入坏", f"bad{run_tag}@x.com", "中文", "2025-01-32", "女"],
     ]))
     _, imp = req("POST", "/api/import/translators", raw=imp_raw, token=ET, ct=imp_ct)
     chk("导入按邮箱去重(2行只进1)", imp["imported"] == 1, imp)
     chk("导入非法日期跳过并报告", len(imp.get("invalid_rows", [])) == 1, imp)
+    imported_profile = next(
+        item for item in req("GET", "/api/translators")[1]
+        if item.get("email") == new_email
+    )
+    chk("导入支持中文性别和主体类型",
+        imported_profile.get("gender") == "female"
+        and imported_profile.get("entity_type") == "individual",
+        imported_profile)
+    chk("Excel 手工评级列不导入",
+        imported_profile.get("internal_rating") is None,
+        imported_profile)
+    translator_count_before_update = len(req("GET", "/api/translators")[1])
+    same_id_raw, same_id_ct = mp(mk_xlsx([
+        [
+            "译员ID", "姓名", "邮箱", "母语", "入库日期",
+            "性别", "主体类型", "所在地",
+        ],
+        [
+            imported_profile["id"], "导入新（已改名）", new_email, "中文",
+            "2025-01-01", "女", "供应商", "上海",
+        ],
+    ]))
+    _, same_id_result = req(
+        "POST", "/api/import/translators",
+        raw=same_id_raw, token=ET, ct=same_id_ct,
+    )
+    translators_after_update = req("GET", "/api/translators")[1]
+    same_id_profile = next(
+        item for item in translators_after_update
+        if item["id"] == imported_profile["id"]
+    )
+    same_id_aliases = req(
+        "GET",
+        f"/api/translators/{imported_profile['id']}/aliases",
+    )[1]
+    chk(
+        "译员Excel同ID覆盖且不新增记录",
+        same_id_result.get("updated") == 1
+        and same_id_result.get("imported") == 0
+        and len(translators_after_update) == translator_count_before_update
+        and same_id_profile["name"] == "导入新（已改名）"
+        and same_id_profile["entity_type"] == "vendor"
+        and same_id_profile["location"] == "上海",
+        {"result": same_id_result, "profile": same_id_profile},
+    )
+    chk(
+        "同ID改名自动保留旧姓名映射",
+        any(item["alias"] == "导入新" for item in same_id_aliases),
+        same_id_aliases,
+    )
+    duplicate_id_raw, duplicate_id_ct = mp(mk_xlsx([
+        ["译员ID", "姓名", "邮箱", "母语", "入库日期", "性别"],
+        [
+            imported_profile["id"], "同ID第一行", new_email,
+            "中文", "2025-01-01", "女",
+        ],
+        [
+            imported_profile["id"], "同ID第二行", new_email,
+            "中文", "2025-01-01", "女",
+        ],
+    ]))
+    _, duplicate_id_result = req(
+        "POST", "/api/import/translators",
+        raw=duplicate_id_raw, token=ET, ct=duplicate_id_ct,
+    )
+    chk(
+        "同一Excel内重复译员ID报告错误",
+        duplicate_id_result.get("updated") == 1
+        and any(
+            "同一文件译员ID重复" in row.get("error", "")
+            for row in duplicate_id_result.get("invalid_rows", [])
+        ),
+        duplicate_id_result,
+    )
     _, po = req("GET", "/api/po?month=2026-06")
     chk("金额验算抓1行(410≠400)", len([p for p in po if not p["amount_ok"]]) == 1)
     _, sm = req("GET", "/api/po/summary?month=2026-06")
@@ -341,6 +447,102 @@ def main():
         profile_after_experiences.get("current_project") == "旧字段项目"
         and profile_after_experiences.get("role") == "翻译",
         profile_after_experiences)
+    chk("译员列表返回全部当前项目摘要",
+        [item["id"] for item in profile_after_experiences.get("current_projects", [])]
+        == [current_our["id"], current_external["id"]],
+        profile_after_experiences.get("current_projects"))
+    _, updated_experience = req(
+        "PUT",
+        f"/api/translators/{experience_tid}/project-experiences/{current_our['id']}",
+        {
+            "cooperation_source": "our_company",
+            "project_status": "current",
+            "project_name": "我司当前项目（更新）",
+            "role": "LQA",
+            "source_lang": "ZH",
+            "target_lang": "EN",
+            "start_date": "2026-07-01",
+            "remaining_volume": 9000,
+            "deadline": "2026-08-01",
+        },
+        token=ET,
+    )
+    chk("项目经历可编辑并保持稳定ID",
+        updated_experience.get("id") == current_our["id"]
+        and updated_experience.get("project_name") == "我司当前项目（更新）"
+        and updated_experience.get("role") == "LQA"
+        and updated_experience.get("remaining_volume") == 9000,
+        updated_experience)
+    req(
+        "DELETE",
+        f"/api/translators/{experience_tid}/project-experiences/{past_external['id']}",
+        token=ET,
+    )
+    _, experiences_after_delete = req(
+        "GET", f"/api/translators/{experience_tid}/project-experiences",
+    )
+    chk("项目经历可删除且不影响其他行",
+        {item["id"] for item in experiences_after_delete}
+        == {current_our["id"], current_external["id"]},
+        experiences_after_delete)
+    export_bytes = req("GET", "/api/export/translators")[1]
+    export_workbook = load_workbook(io.BytesIO(export_bytes), data_only=True)
+    project_export_rows = list(
+        export_workbook["项目经历"].iter_rows(values_only=True)
+    )
+    chk("译员导出包含项目经历工作表",
+        project_export_rows[0][0:4]
+        == ("id", "translator_id", "translator_name", "translator_email")
+        and any(row[6] == "我司当前项目（更新）" for row in project_export_rows[1:]),
+        project_export_rows[:3])
+    alias_export_rows = list(
+        export_workbook["名称映射"].iter_rows(values_only=True)
+    )
+    chk(
+        "译员导出包含稳定ID名称映射工作表",
+        alias_export_rows[0]
+        == (
+            "id", "translator_id", "translator_name",
+            "translator_email", "alias",
+        )
+        and any(
+            row[1] == imported_profile["id"] and row[4] == "导入新"
+            for row in alias_export_rows[1:]
+        ),
+        alias_export_rows[:5],
+    )
+
+    imported_project_email = f"project-import{run_tag}@x.com"
+    workbook_raw, workbook_ct = mp(mk_xlsx_sheets({
+        "译员": [
+            ["姓名", "邮箱", "母语", "入库日期", "性别", "主体类型"],
+            ["项目导入译员" + run_tag, imported_project_email, "英语", "2026-07-20", "男", "供应商"],
+        ],
+        "项目经历": [
+            ["译员邮箱", "合作来源", "项目状态", "项目名称", "合作公司", "角色", "源语言", "目标语言"],
+            [imported_project_email, "与别家合作", "过往项目", "导入项目", "外部工作室", "翻译", "EN", "ZH-HANS"],
+        ],
+    }))
+    _, workbook_import = req(
+        "POST", "/api/import/translators",
+        raw=workbook_raw, token=ET, ct=workbook_ct,
+    )
+    imported_project_profile = next(
+        item for item in req("GET", "/api/translators")[1]
+        if item.get("email") == imported_project_email
+    )
+    imported_project_rows = req(
+        "GET",
+        f"/api/translators/{imported_project_profile['id']}/project-experiences",
+    )[1]
+    chk("同一工作簿可导入译员及项目经历",
+        workbook_import.get("imported") == 1
+        and workbook_import.get("imported_projects") == 1
+        and imported_project_profile.get("gender") == "male"
+        and imported_project_profile.get("entity_type") == "vendor"
+        and imported_project_rows[0].get("project_name") == "导入项目"
+        and imported_project_rows[0].get("cooperation_source") == "external",
+        {"result": workbook_import, "projects": imported_project_rows})
     chk("不存在译员的项目经历GET返回404",
         code(lambda: req("GET", "/api/translators/99999/project-experiences")) == 404)
     chk("不存在译员的项目经历POST返回404",
@@ -373,6 +575,34 @@ def main():
             },
             token=AT,
         )) == 403)
+    chk("只读角色不能编辑项目经历",
+        code(lambda: req(
+            "PUT",
+            f"/api/translators/{experience_tid}/project-experiences/{current_our['id']}",
+            {
+                "cooperation_source": "our_company",
+                "project_status": "current",
+                "project_name": "只读编辑",
+            },
+            token=BT,
+        )) == 403)
+    chk("agent不能删除项目经历",
+        code(lambda: req(
+            "DELETE",
+            f"/api/translators/{experience_tid}/project-experiences/{current_our['id']}",
+            token=AT,
+        )) == 403)
+    chk("跨译员编辑项目经历返回404",
+        code(lambda: req(
+            "PUT",
+            f"/api/translators/1/project-experiences/{current_our['id']}",
+            {
+                "cooperation_source": "our_company",
+                "project_status": "current",
+                "project_name": "跨译员",
+            },
+            token=ET,
+        )) == 404)
     chk("非法项目状态返回422",
         code(lambda: req(
             "POST", f"/api/translators/{experience_tid}/project-experiences",
@@ -436,6 +666,20 @@ def main():
             for item in audit_rows
         ),
         audit_rows[:5])
+    chk("编辑和删除项目经历写入审计日志",
+        any(
+            item.get("action") == "编辑"
+            and item.get("entity") == "项目经历"
+            and item.get("entity_id") == current_our.get("id")
+            for item in audit_rows
+        )
+        and any(
+            item.get("action") == "删除"
+            and item.get("entity") == "项目经历"
+            and item.get("entity_id") == past_external.get("id")
+            for item in audit_rows
+        ),
+        audit_rows[:10])
 
     print("=== D 安全（加密脱敏）===")
     _, pm = req("GET", "/api/translators/1/payment")
@@ -557,11 +801,12 @@ def main():
     a3 = tr(3)
     chk("客诉联动 次数+1", a3["complaint_count"] == (b3["complaint_count"] or 0) + 1)
     chk("客诉联动 扣款累加150", round(a3["deduction_total"] - (b3["deduction_total"] or 0), 2) == 150)
-    req("POST", "/api/translators/3/quality", {"evaluation_period": "2026-06", "score": 88, "minor_errors": 2}, token=ET)
-    req("POST", "/api/translators/3/quality", {"evaluation_period": "2026-07", "score": 92, "minor_errors": 1}, token=ET)
+    req("POST", "/api/translators/3/quality", {"evaluation_period": "2026-06", "qa_type": "LQE", "score": 88, "minor_errors": 2}, token=ET)
+    req("POST", "/api/translators/3/quality", {"evaluation_period": "2026-07", "qa_type": "LQE", "score": 92, "minor_errors": 1}, token=ET)
     q3 = tr(3)
     chk("质量联动 最近分=92", q3["recent_qa_score"] == 92)
     chk("质量联动 累计均分=90", q3["cumulative_qa_score"] == 90)
+    chk("累计均分90自动评级A", q3["internal_rating"] == "A", q3)
     chk("质量联动 低错累计+3", q3["low_error_count"] == (b3["low_error_count"] or 0) + 3)
     chk("谈判联动 成功后谈后费率", (lambda t: (req("POST", "/api/translators/3/rate-changes", {"change_date": "2026-06-25", "task_type": "翻译", "original_rate": 150, "new_rate": 140, "result": "成功"}, token=ET), tr(3))[1]["post_negotiation_rate"] == 140)(None))
 
@@ -570,7 +815,8 @@ def main():
         "name": "删除校验" + run_tag,
         "email": f"delete{run_tag}@x.com",
         "native_language": "中文",
-        "onboarding_date": "2026-07-01"
+        "onboarding_date": "2026-07-01",
+        "gender": "male",
     }, token=ET)
     did = del_tr["id"]
     req("POST", f"/api/translators/{did}/language-pairs",
@@ -584,12 +830,13 @@ def main():
     rc_id = req("GET", f"/api/translators/{did}/rate-changes")[1][0]["id"]
     req("DELETE", f"/api/translators/{did}/rate-changes/{rc_id}", token=ET)
     chk("删除报价变更后列表为空", req("GET", f"/api/translators/{did}/rate-changes")[1] == [])
-    req("POST", f"/api/translators/{did}/quality", {"evaluation_period": "2026-06", "score": 80, "minor_errors": 2}, token=ET)
-    req("POST", f"/api/translators/{did}/quality", {"evaluation_period": "2026-07", "score": 100, "minor_errors": 1}, token=ET)
+    req("POST", f"/api/translators/{did}/quality", {"evaluation_period": "2026-06", "qa_type": "LQE", "score": 80, "minor_errors": 2}, token=ET)
+    req("POST", f"/api/translators/{did}/quality", {"evaluation_period": "2026-07", "qa_type": "LQE", "score": 100, "minor_errors": 1}, token=ET)
     q_id = req("GET", f"/api/translators/{did}/quality")[1][0]["id"]
     req("DELETE", f"/api/translators/{did}/quality/{q_id}", token=ET)
     dq = tr(did)
     chk("删除质量后重算最近分", dq["recent_qa_score"] == 80 and dq["cumulative_qa_score"] == 80 and dq["low_error_count"] == 2, dq)
+    chk("删除质量后自动重算评级B", dq["internal_rating"] == "B", dq)
     req("POST", f"/api/translators/{did}/contracts", {"contract_number": "DEL-" + run_tag, "status": "有效"}, token=ET)
     ct_id = req("GET", f"/api/translators/{did}/contracts")[1][0]["id"]
     req("DELETE", f"/api/translators/{did}/contracts/{ct_id}", token=ET)
@@ -611,6 +858,814 @@ def main():
     req("DELETE", f"/api/translators/{did}/payment", token=ET)
     chk("删除支付信息后为空", req("GET", f"/api/translators/{did}/payment")[1] is None)
     chk("boss删除子表403", code(lambda: req("DELETE", f"/api/translators/{did}/quality/1", token=BT)) == 403)
+
+    print("=== I 反馈文档 13 项新增闭环 ===")
+    filter_body = {
+        "name": "精确筛选" + run_tag,
+        "email": f"filter{run_tag}@x.com",
+        "native_language": "English",
+        "onboarding_date": "2026-07-29",
+        "wechat": "filter_wechat",
+        "domains": "RPG, SLG",
+        "gender": "female",
+        "entity_type": "individual",
+        "daily_output": 3000,
+        "weekend_off": True,
+        "availability": "空闲",
+        "settlement_mode": "cumulative",
+    }
+    _, filter_translator = req(
+        "POST", "/api/translators", filter_body, token=ET,
+    )
+    filter_tid = filter_translator["id"]
+    chk(
+        "新增译员尚无 LQE 时不自动评级",
+        filter_translator.get("internal_rating") is None,
+        filter_translator,
+    )
+    req(
+        "POST", f"/api/translators/{filter_tid}/quality",
+        {"evaluation_period": "2026-07", "qa_type": "LQE", "score": 87},
+        token=ET,
+    )
+    auto_rated = tr(filter_tid)
+    chk(
+        "累计均分87自动评级A-",
+        auto_rated.get("cumulative_qa_score") == 87
+        and auto_rated.get("internal_rating") == "A-",
+        auto_rated,
+    )
+    _, manual_update = req(
+        "PUT",
+        f"/api/translators/{filter_tid}",
+        filter_body | {
+            "manual_rating": "S",
+            "manual_rating_reason": "非质量原因暂停合作",
+        },
+        token=ET,
+    )
+    chk(
+        "人工例外评级可覆盖 LQE 自动评级并记录原因",
+        manual_update.get("internal_rating") == "S"
+        and manual_update.get("manual_rating") == "S"
+        and manual_update.get("manual_rating_reason") == "非质量原因暂停合作",
+        manual_update,
+    )
+    _, cleared_manual = req(
+        "PUT",
+        f"/api/translators/{filter_tid}",
+        filter_body | {"manual_rating": None, "manual_rating_reason": None},
+        token=ET,
+    )
+    chk(
+        "清除人工例外评级后恢复 LQE 自动评级",
+        cleared_manual.get("internal_rating") == "A-",
+        cleared_manual,
+    )
+    req(
+        "POST", f"/api/translators/{filter_tid}/language-pairs",
+        {
+            "source_lang": "ZH",
+            "target_lang": "EN",
+            "translation_rate": 200,
+            "lqa_rate": 15,
+            "currency": "CNY",
+        },
+        token=ET,
+    )
+    deadline = (date.today() + timedelta(days=2)).isoformat()
+    req(
+        "POST", f"/api/translators/{filter_tid}/project-experiences",
+        {
+            "cooperation_source": "our_company",
+            "project_status": "current",
+            "project_name": "高负荷翻译",
+            "role": "翻译",
+            "source_lang": "ZH",
+            "target_lang": "EN",
+            "remaining_volume": 300000,
+            "deadline": deadline,
+        },
+        token=ET,
+    )
+    req(
+        "POST", f"/api/translators/{filter_tid}/project-experiences",
+        {
+            "cooperation_source": "our_company",
+            "project_status": "current",
+            "project_name": "LQA 小时",
+            "role": "LQA",
+            "source_lang": "ZH",
+            "target_lang": "EN",
+            "remaining_volume": 30,
+            "deadline": deadline,
+        },
+        token=ET,
+    )
+    computed = next(
+        item for item in req("GET", "/api/translators")[1]
+        if item["id"] == filter_tid
+    )
+    chk(
+        "档期按月度项目量和日产能计算并提示人工冲突",
+        computed.get("computed_availability") == "警告"
+        and computed.get("availability_conflict") is True
+        and len(computed.get("availability_basis", [])) == 2,
+        computed,
+    )
+    basis_by_role = {
+        item["role"]: item for item in computed.get("availability_basis", [])
+    }
+    chk(
+        "各任务沿用翻译日产能并按20个工作日计算月产能",
+        basis_by_role["翻译"]["daily_capacity"] == 3000
+        and basis_by_role["翻译"]["monthly_capacity"] == 60000
+        and basis_by_role["LQA"]["daily_capacity"] == 3000
+        and basis_by_role["LQA"]["monthly_capacity"] == 60000,
+        basis_by_role,
+    )
+
+    query = urlencode({
+        "source_lang": "ZH",
+        "target_lang": "EN",
+        "native_language": "English",
+        "rate_type": "translation",
+        "min_rate": 150,
+        "max_rate": 300,
+        "currency": "CNY",
+        "domain": "RPG",
+        "has_wechat": "true",
+        "rating": "A-",
+        "gender": "female",
+        "entity_type": "individual",
+        "paged": "true",
+        "page": 1,
+        "page_size": 20,
+    })
+    _, filtered = req("GET", "/api/translators?" + query)
+    chk(
+        "精确筛选全部条件按AND命中并返回分页总数",
+        filtered.get("total") == 1
+        and filtered["items"][0]["id"] == filter_tid,
+        filtered,
+    )
+    _, overview = req("GET", "/api/overview")
+    chk(
+        "汇总面板返回母语、语言对和S/A/A-/B评级",
+        overview["native_languages"].get("English") == 1
+        and overview["language_pairs"].get("ZH→EN", 0) >= 1
+        and overview["ratings"].get("A-", 0) >= 1
+        and set(overview["ratings"]) == {"S", "A", "A-", "B"},
+        overview,
+    )
+    lqe_raw, lqe_ct = mp(mk_xlsx([
+        ["子表", "段数", "词数", "错误数", "严重错误", "SCORE", "STATUS"],
+        [filter_translator["name"], 1, 100, 0, 0, 99, "PASS"],
+    ]))
+    _, lqe_import = req(
+        "POST",
+        "/api/import/lqe?period=2026-08",
+        raw=lqe_raw,
+        token=ET,
+        ct=lqe_ct,
+    )
+    lqe_rated = tr(filter_tid)
+    chk(
+        "LQE 导入后累计均分与评级自动重算",
+        lqe_import.get("imported") == 1
+        and lqe_rated.get("cumulative_qa_score") == 93
+        and lqe_rated.get("internal_rating") == "A",
+        {"import": lqe_import, "translator": lqe_rated},
+    )
+
+    _, fixed_price = req(
+        "POST", f"/api/translators/{filter_tid}/project-prices",
+        {
+            "project_name": "整包项目",
+            "price_type": "fixed",
+            "amount": 1200,
+            "unit": "project",
+            "currency": "CNY",
+        },
+        token=ET,
+    )
+    _, custom_price = req(
+        "POST", f"/api/translators/{filter_tid}/project-prices",
+        {
+            "project_name": "音频校验",
+            "price_type": "custom",
+            "custom_task_name": "音频逐条检查",
+            "amount": 80,
+            "unit": "hour",
+            "currency": "CNY",
+        },
+        token=ET,
+    )
+    chk(
+        "一口价和自定义其他价格可独立保存",
+        fixed_price.get("task_type") == "一口价"
+        and fixed_price.get("amount") == 1200
+        and custom_price.get("custom_task_name") == "音频逐条检查",
+        {"fixed": fixed_price, "custom": custom_price},
+    )
+    _, updated_fixed_price = req(
+        "PUT",
+        f"/api/translators/{filter_tid}/project-prices/{fixed_price['id']}",
+        {
+            "project_name": "整包项目",
+            "price_type": "fixed",
+            "amount": 1300,
+            "unit": "project",
+            "currency": "CNY",
+        },
+        token=ET,
+    )
+    chk(
+        "项目专用价格可编辑",
+        updated_fixed_price.get("amount") == 1300,
+        updated_fixed_price,
+    )
+    generic_filters = json.dumps([
+        {
+            "field": "name",
+            "op": "eq",
+            "value": filter_translator["name"],
+        },
+        {"field": "gender", "op": "eq", "value": "female"},
+        {
+            "field": "project_prices.amount",
+            "op": "between",
+            "value": "1200,1400",
+        },
+    ], ensure_ascii=False)
+    _, generic_filtered = req(
+        "GET",
+        "/api/translators?" + urlencode({
+            "filters": generic_filters,
+            "paged": "true",
+            "page": 1,
+            "page_size": 20,
+        }),
+    )
+    chk(
+        "主表与业务子表所有字段可组合筛选",
+        generic_filtered.get("total") == 1
+        and generic_filtered["items"][0]["id"] == filter_tid,
+        generic_filtered,
+    )
+    _, price_match = req(
+        "GET",
+        "/api/po/price-match?" + urlencode({
+            "translator_id": filter_tid,
+            "project": "整包项目",
+            "role": "一口价",
+            "currency": "CNY",
+        }),
+    )
+    _, auto_fixed_po = req(
+        "POST", "/api/po",
+        {
+            "translator_id": filter_tid,
+            "settlement_month": "2026-10",
+            "project": "整包项目",
+            "role": "一口价",
+            "currency": "CNY",
+            "po_number": "PO-AUTO-FIXED-" + run_tag,
+        },
+        token=ET,
+    )
+    chk(
+        "PO按最新项目价格自动匹配且保留来源",
+        price_match.get("matched") is True
+        and price_match.get("project_price_id") == fixed_price["id"]
+        and price_match.get("amount") == 1300
+        and auto_fixed_po.get("pricing_mode") == "fixed"
+        and auto_fixed_po.get("amount") == 1300,
+        {"match": price_match, "po": auto_fixed_po},
+    )
+    chk(
+        "自定义其他价格缺任务名称422",
+        code(lambda: req(
+            "POST", f"/api/translators/{filter_tid}/project-prices",
+            {
+                "project_name": "坏价格",
+                "price_type": "custom",
+                "amount": 1,
+                "unit": "other",
+                "currency": "CNY",
+            },
+            token=ET,
+        )) == 422,
+    )
+
+    _, fixed_po = req(
+        "POST", "/api/po",
+        {
+            "translator_id": filter_tid,
+            "settlement_month": "2026-11",
+            "project": "整包项目",
+            "role": "一口价",
+            "pricing_mode": "fixed",
+            "amount": 1200,
+            "currency": "CNY",
+            "po_number": "PO-FIXED-" + run_tag,
+        },
+        token=ET,
+    )
+    _, hourly_po = req(
+        "POST", "/api/po",
+        {
+            "translator_id": filter_tid,
+            "settlement_month": "2026-11",
+            "project": "LQA 小时",
+            "role": "LQA",
+            "pricing_mode": "per_hour",
+            "word_count": 3,
+            "rate": 15,
+            "currency": "USD",
+            "po_number": "PO-HOUR-" + run_tag,
+        },
+        token=ET,
+    )
+    _, manual_po = req(
+        "POST", "/api/po",
+        {
+            "translator_id": filter_tid,
+            "settlement_month": "2026-11",
+            "project": "手工调整",
+            "role": "其他",
+            "pricing_mode": "manual",
+            "amount": 99,
+            "currency": "CNY",
+            "po_number": "PO-MANUAL-" + run_tag,
+        },
+        token=ET,
+    )
+    chk(
+        "PO固定价、按小时和手工金额分支正确",
+        fixed_po["amount"] == 1200
+        and hourly_po["amount"] == 45
+        and manual_po["amount"] == 99,
+        {"fixed": fixed_po, "hourly": hourly_po, "manual": manual_po},
+    )
+    _, corrected_po = req(
+        "PUT", f"/api/po/{manual_po['id']}",
+        {
+            "translator_id": filter_tid,
+            "settlement_month": "2026-11",
+            "project": "手工调整",
+            "role": "其他",
+            "pricing_mode": "manual",
+            "amount": 109,
+            "currency": "CNY",
+            "status": "有争议",
+            "po_number": "PO-MANUAL-" + run_tag,
+            "remarks": "人工复核修正",
+        },
+        token=ET,
+    )
+    _, unpaid_details = req("GET", f"/api/po/unpaid/{filter_tid}")
+    chk(
+        "PO支持人工修正并按译员展示未结算明细",
+        corrected_po.get("amount") == 109
+        and corrected_po.get("status") == "有争议"
+        and all(
+            row["status"] in {"未开票", "已开票待付"}
+            for row in unpaid_details["rows"]
+        )
+        and unpaid_details["totals"].get("CNY", 0) >= 2500,
+        {"corrected": corrected_po, "unpaid": unpaid_details},
+    )
+    po_filter_query = urlencode({
+        "month": "2026-11",
+        "translator": filter_translator["name"],
+        "project": "整包",
+        "status": "未开票",
+        "role": "一口价",
+        "currency": "cny",
+        "pricing_mode": "fixed",
+        "settlement_mode": "cumulative",
+        "min_amount": 1000,
+        "max_amount": 1500,
+        "po_number": "FIXED-" + run_tag,
+    })
+    _, filtered_po = req("GET", "/api/po?" + po_filter_query)
+    chk(
+        "PO结算支持金额区间等十一项AND组合筛选",
+        len(filtered_po) == 1 and filtered_po[0]["id"] == fixed_po["id"],
+        filtered_po,
+    )
+    _, filtered_po_summary = req("GET", "/api/po/summary?" + po_filter_query)
+    chk(
+        "PO筛选条件同步作用于当月及跨月汇总",
+        filtered_po_summary["by_currency"] == {
+            "CNY": {"unpaid": 1200.0, "paid": 0.0},
+        }
+        and filtered_po_summary["cumulative_unpaid_by_currency"] == {
+            "CNY": 2500.0,
+        },
+        filtered_po_summary,
+    )
+    mismatch_filter_query = urlencode({
+        "month": "2026-11",
+        "translator": filter_translator["name"],
+        "project": "整包",
+        "currency": "USD",
+    })
+    _, mismatched_po = req("GET", "/api/po?" + mismatch_filter_query)
+    chk("PO组合筛选任一条件不符即不命中", mismatched_po == [], mismatched_po)
+
+    projectlist_alias = "Projectlist别名" + run_tag
+    _, created_alias = req(
+        "POST",
+        f"/api/translators/{filter_tid}/aliases",
+        {"alias": projectlist_alias},
+        token=ET,
+    )
+    _, alias_search = req(
+        "GET",
+        "/api/translators?" + urlencode({"q": projectlist_alias}),
+    )
+    chk(
+        "名称映射可维护且可用于译员搜索",
+        created_alias["alias"] == projectlist_alias
+        and len(alias_search) == 1
+        and alias_search[0]["id"] == filter_tid,
+        {"alias": created_alias, "search": alias_search},
+    )
+    projectlist_alias = projectlist_alias + "更新"
+    _, updated_alias = req(
+        "PUT",
+        f"/api/translators/{filter_tid}/aliases/{created_alias['id']}",
+        {"alias": projectlist_alias},
+        token=ET,
+    )
+    _, updated_alias_search = req(
+        "GET",
+        "/api/translators?" + urlencode({"q": projectlist_alias}),
+    )
+    chk(
+        "名称映射可编辑且更新后仍指向同一稳定ID",
+        updated_alias["id"] == created_alias["id"]
+        and updated_alias["alias"] == projectlist_alias
+        and len(updated_alias_search) == 1
+        and updated_alias_search[0]["id"] == filter_tid,
+        {"alias": updated_alias, "search": updated_alias_search},
+    )
+    _, temporary_alias = req(
+        "POST",
+        f"/api/translators/{filter_tid}/aliases",
+        {"alias": "临时别名" + run_tag},
+        token=ET,
+    )
+    req(
+        "DELETE",
+        f"/api/translators/{filter_tid}/aliases/{temporary_alias['id']}",
+        token=ET,
+    )
+    remaining_aliases = req(
+        "GET",
+        f"/api/translators/{filter_tid}/aliases",
+    )[1]
+    chk(
+        "名称映射可删除且不影响其他映射",
+        all(item["id"] != temporary_alias["id"] for item in remaining_aliases)
+        and any(item["id"] == created_alias["id"] for item in remaining_aliases),
+        remaining_aliases,
+    )
+
+    projectlist_raw, projectlist_ct = mp(mk_xlsx_sheets({
+        "【项目组】Projectlist (V1.0)": [
+            ["说明"],
+            [None],
+            [
+                "项目名称（稿件/LQA批次）", "DDL", "目标语言", "指定译员",
+                "工作类型", "翻译费率", "币种", "REPNEW 实际",
+                "译员PO时间（X月）", "原语言", "结算PO",
+            ],
+            [
+                "真实翻译批次", "2026-07-31", "英语",
+                projectlist_alias, "翻译", 0.2, "CNY", 1000,
+                "7 月", "简体中文", "□",
+            ],
+            [
+                "真实LQA批次", "2026-07-31", "英语",
+                filter_translator["name"], "LQA", 15, "USD", 3,
+                "7 月", "简体中文", "✅",
+            ],
+            [
+                "藏语单语LQA", "2026-07-31", "藏语",
+                filter_translator["name"], "LQA", 15, "USD", 1,
+                "7 月", "藏语", "□",
+            ],
+            [
+                "台繁LQA", "2026-07-31", "台繁",
+                filter_translator["name"], "LQA", 15, "USD", 2,
+                "7 月", "简体中文", "□",
+            ],
+            [
+                "欧洲语言评估（法语）", "2026-07-31", "欧洲语言",
+                filter_translator["name"], "审校", 0.1, "CNY", 1000,
+                "7 月", "英语", "□",
+            ],
+            [
+                "欧洲语言通用批次", "2026-07-31", "欧洲语言",
+                filter_translator["name"], "审校", 0.1, "CNY", 500,
+                "7 月", "英语", "□",
+            ],
+        ],
+    }))
+    before_projectlist = len(req("GET", "/api/po?month=2026-07")[1])
+    _, projectlist_all = req(
+        "POST", "/api/import/po?preview=true&projectlist_po_state=all",
+        raw=projectlist_raw, token=ET, ct=projectlist_ct,
+    )
+    chk(
+        "Projectlist只读预览识别名称映射及已勾选历史记录",
+        projectlist_all.get("source_format") == "projectlist"
+        and projectlist_all.get("write_enabled") is False
+        and projectlist_all.get("quantity_rule_confirmed") is False
+        and projectlist_all.get("ready") == 0
+        and projectlist_all.get("mapping_ready") == 5
+        and projectlist_all.get("checked_rows") == 1
+        and projectlist_all.get("unchecked_rows") == 5
+        and projectlist_all.get("skipped_settled") == 1
+        and not projectlist_all.get("invalid_rows")
+        and any(
+            row.get("translator_id") == filter_tid
+            and row.get("translator_name") == projectlist_alias
+            and row.get("action") == "blocked_quantity_rule"
+            for row in projectlist_all.get("preview_rows", [])
+        ),
+        projectlist_all,
+    )
+    _, projectlist_checked = req(
+        "POST", "/api/import/po?preview=true&projectlist_po_state=checked",
+        raw=projectlist_raw, token=ET, ct=projectlist_ct,
+    )
+    _, projectlist_unchecked = req(
+        "POST", "/api/import/po?preview=true&projectlist_po_state=unchecked",
+        raw=projectlist_raw, token=ET, ct=projectlist_ct,
+    )
+    chk(
+        "Projectlist支持已勾选和未勾选筛选",
+        projectlist_checked.get("selected_rows") == 1
+        and projectlist_checked.get("skipped_settled") == 1
+        and projectlist_checked["preview_rows"][0]["action"] == "skip_settled"
+        and projectlist_unchecked.get("selected_rows") == 5
+        and projectlist_unchecked.get("mapping_ready") == 5
+        and all(
+            row["action"] == "blocked_quantity_rule"
+            for row in projectlist_unchecked.get("preview_rows", [])
+        ),
+        {
+            "checked": projectlist_checked,
+            "unchecked": projectlist_unchecked,
+        },
+    )
+    chk(
+        "Projectlist数量算法未确认时写入保持禁用",
+        code(lambda: req(
+            "POST", "/api/import/po",
+            raw=projectlist_raw, token=ET, ct=projectlist_ct,
+        )) == 409
+        and len(req("GET", "/api/po?month=2026-07")[1])
+        == before_projectlist,
+    )
+    _, cumulative_summary = req("GET", "/api/po/summary?month=2026-11")
+    chk(
+        "PO汇总同时返回本月和跨月累计未付",
+        cumulative_summary["by_currency"]["CNY"]["unpaid"] >= 1200
+        and cumulative_summary["cumulative_unpaid_by_currency"]["CNY"]
+        >= cumulative_summary["by_currency"]["CNY"]["unpaid"],
+        cumulative_summary,
+    )
+
+    _, wechat_account = req(
+        "POST", f"/api/translators/{filter_tid}/payment-accounts",
+        {
+            "method": "wechat",
+            "account_name": filter_translator["name"],
+            "account_number": "wx-" + run_tag,
+            "is_default": True,
+        },
+        token=ET,
+    )
+    _, usd_account = req(
+        "POST", f"/api/translators/{filter_tid}/payment-accounts",
+        {
+            "method": "corporate_usd",
+            "account_name": "Filter Studio",
+            "account_number": "12345678",
+            "bank_name": "Test Bank",
+            "bank_address": "1 Test Road",
+            "swift_code": "TESTUS33",
+            "routing_code": "110000",
+            "is_default": True,
+        },
+        token=ET,
+    )
+    _, alipay_account = req(
+        "POST", f"/api/translators/{filter_tid}/payment-accounts",
+        {
+            "method": "alipay",
+            "account_name": filter_translator["name"],
+            "account_number": "alipay-" + run_tag,
+        },
+        token=ET,
+    )
+    _, personal_account = req(
+        "POST", f"/api/translators/{filter_tid}/payment-accounts",
+        {
+            "method": "personal_bank",
+            "account_name": filter_translator["name"],
+            "account_number": "6222000011112222",
+            "bank_name": "测试银行",
+        },
+        token=ET,
+    )
+    _, cny_account = req(
+        "POST", f"/api/translators/{filter_tid}/payment-accounts",
+        {
+            "method": "corporate_cny",
+            "account_name": "Filter Studio CN",
+            "account_number": "6222000099990000",
+            "bank_name": "测试银行",
+            "tax_id": "91310000TEST",
+        },
+        token=ET,
+    )
+    accounts = req(
+        "GET", f"/api/translators/{filter_tid}/payment-accounts",
+    )[1]
+    chk(
+        "五种支付方式可并存且暂不设置默认账户、敏感账号脱敏",
+        sum(1 for account in accounts if account["is_default"]) == 0
+        and {account["method"] for account in accounts}
+        == {
+            "wechat", "alipay", "personal_bank",
+            "corporate_cny", "corporate_usd",
+        }
+        and next(
+            account for account in accounts if account["id"] == usd_account["id"]
+        )["account_number"].endswith("5678"),
+        accounts,
+    )
+    _, updated_usd_account = req(
+        "PUT",
+        f"/api/translators/{filter_tid}/payment-accounts/{usd_account['id']}",
+        {
+            "method": "corporate_usd",
+            "account_name": "Filter Studio",
+            "bank_name": "Test Bank",
+            "bank_address": "2 Test Road",
+            "swift_code": "TESTUS33",
+            "routing_code": "220000",
+            "is_default": True,
+        },
+        token=ET,
+    )
+    chk(
+        "支付账户可编辑且空账号字段保留原加密值",
+        updated_usd_account.get("bank_address") == "2 Test Road"
+        and updated_usd_account.get("account_number", "").endswith("5678"),
+        updated_usd_account,
+    )
+    revealed_account = req(
+        "GET",
+        f"/api/translators/{filter_tid}/payment-accounts/{usd_account['id']}/reveal",
+        token=ET,
+    )[1]
+    chk(
+        "支付账户明文仅编辑角色可审计读取",
+        revealed_account.get("account_number") == "12345678"
+        and code(lambda: req(
+            "GET",
+            f"/api/translators/{filter_tid}/payment-accounts/{usd_account['id']}/reveal",
+            token=BT,
+        )) == 403,
+        revealed_account,
+    )
+    _, minimal_payment = req(
+        "POST", f"/api/translators/{filter_tid}/payment-accounts",
+        {
+            "method": "corporate_cny",
+            "remarks": "仅备注也可保存",
+        },
+        token=ET,
+    )
+    chk(
+        "支付方式字段均非必填但至少填写一项信息",
+        minimal_payment.get("remarks") == "仅备注也可保存"
+        and code(lambda: req(
+            "POST", f"/api/translators/{filter_tid}/payment-accounts",
+            {"method": "corporate_cny"},
+            token=ET,
+        )) == 400,
+        minimal_payment,
+    )
+    png_data = b"\x89PNG\r\n\x1a\nacceptance"
+    qr_raw, qr_ct = mp_file(png_data, "wechat.png", "image/png")
+    _, qr_result = req(
+        "POST",
+        f"/api/translators/{filter_tid}/payment-accounts/{wechat_account['id']}/qr",
+        raw=qr_raw, token=ET, ct=qr_ct,
+    )
+    qr_download = req(
+        "GET",
+        f"/api/translators/{filter_tid}/payment-accounts/{wechat_account['id']}/qr",
+        token=BT,
+    )[1]
+    chk(
+        "微信收款码可上传并由登录角色下载",
+        qr_result.get("has_qr") is True and qr_download == png_data,
+        qr_result,
+    )
+    chk(
+        "收款码未登录不可下载",
+        code(lambda: req(
+            "GET",
+            f"/api/translators/{filter_tid}/payment-accounts/{wechat_account['id']}/qr",
+        )) == 403,
+    )
+    req(
+        "DELETE",
+        f"/api/translators/{filter_tid}/payment-accounts/{usd_account['id']}",
+        token=ET,
+    )
+    accounts_after_delete = req(
+        "GET", f"/api/translators/{filter_tid}/payment-accounts",
+    )[1]
+    chk(
+        "删除账户后不自动指定默认账户",
+        len(accounts_after_delete) == 5
+        and accounts_after_delete[0]["id"] == wechat_account["id"]
+        and accounts_after_delete[0]["is_default"] is False
+        and sum(
+            1 for account in accounts_after_delete if account["is_default"]
+        ) == 0,
+        accounts_after_delete,
+    )
+
+    attachment_data = b"PK\x03\x04qualification"
+    attachment_raw, attachment_ct = mp_file(
+        attachment_data,
+        "sample.docx",
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        {"category": "sample"},
+    )
+    _, uploaded_attachment = req(
+        "POST", f"/api/translators/{filter_tid}/attachments",
+        raw=attachment_raw, token=ET, ct=attachment_ct,
+    )
+    attachments = req(
+        "GET", f"/api/translators/{filter_tid}/attachments", token=BT,
+    )[1]
+    attachment_download = req(
+        "GET",
+        f"/api/translators/{filter_tid}/attachments/{uploaded_attachment['id']}",
+        token=BT,
+    )[1]
+    chk(
+        "资质附件保存元数据且登录角色可下载",
+        len(attachments) == 1
+        and attachments[0]["category"] == "sample"
+        and len(attachments[0]["sha256"]) == 64
+        and attachment_download == attachment_data,
+        attachments,
+    )
+    chk(
+        "资质附件列表未登录403",
+        code(lambda: req(
+            "GET", f"/api/translators/{filter_tid}/attachments",
+        )) == 403,
+    )
+    fake_pdf_raw, fake_pdf_ct = mp_file(
+        b"not-a-pdf", "fake.pdf", "application/pdf", {"category": "certificate"},
+    )
+    chk(
+        "伪造扩展名附件400",
+        code(lambda: req(
+            "POST", f"/api/translators/{filter_tid}/attachments",
+            raw=fake_pdf_raw, token=ET, ct=fake_pdf_ct,
+        )) == 400,
+    )
+    req(
+        "DELETE",
+        f"/api/translators/{filter_tid}/attachments/{uploaded_attachment['id']}",
+        token=ET,
+    )
+    chk(
+        "资质附件删除后元数据和文件均不可访问",
+        req(
+            "GET", f"/api/translators/{filter_tid}/attachments", token=ET,
+        )[1] == []
+        and code(lambda: req(
+            "GET",
+            f"/api/translators/{filter_tid}/attachments/{uploaded_attachment['id']}",
+            token=ET,
+        )) == 404,
+    )
 
     print()
     print("结果:", f"{sum(ok)}/{len(ok)} 全通过 ✅" if all(ok) else f"{sum(ok)}/{len(ok)}（有失败）")
