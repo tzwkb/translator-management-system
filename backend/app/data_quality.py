@@ -29,14 +29,10 @@ DATE_FIELDS = (
 MONTH_FIELDS = (
     ("po_settlements", "id", "settlement_month", True),
     ("quality_scores", "id", "evaluation_period", False),
+    ("capacity_month_overrides", "id", "month", True),
 )
 
-RANGE_FIELDS = (
-    ("capacity_allocations", "id", "period_year", 1900, 2100),
-    ("capacity_allocations", "id", "period_month", 1, 12),
-    ("capacity_allocations", "id", "week_no", 1, 6),
-    ("capacity_allocations", "id", "occupancy_pct", 0, 100),
-)
+RANGE_FIELDS = ()
 
 
 def _blank(value: Any) -> bool:

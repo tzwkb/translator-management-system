@@ -11,7 +11,7 @@ for (const field of [
   "status",
   "internal_rating",
   "current_project",
-  "availability",
+  "effective_availability",
   "contract_expiry",
   "last_contact",
 ]) {

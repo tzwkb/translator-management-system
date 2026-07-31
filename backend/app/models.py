@@ -53,8 +53,6 @@ class Translator(Base):
     current_project: Mapped[Optional[str]] = mapped_column(String(200))
     role: Mapped[Optional[str]] = mapped_column(String(50))
     daily_output: Mapped[Optional[int]] = mapped_column(Integer)
-    weekend_off: Mapped[Optional[bool]] = mapped_column(Boolean)
-    availability: Mapped[Optional[str]] = mapped_column(String(50))
     cumulative_word_count: Mapped[int] = mapped_column(BigInteger, default=0)
     # 财务信息
     currency: Mapped[Optional[str]] = mapped_column(String(10))
@@ -92,7 +90,7 @@ class Translator(Base):
                 "mtpe_rate", "review_rate", "lqa_rate", "rate_confirmed_date", "domains",
                 "text_types", "cat_tools", "manual_rating", "manual_rating_reason",
                 "trial_result", "current_project",
-                "role", "daily_output", "weekend_off", "availability", "currency",
+                "role", "daily_output", "currency",
                 "payment_method", "settlement_mode", "invoice_type", "tax_deduction", "contract_status",
                 "contract_expiry", "nda_signed", "punctuality_rate", "responsiveness",
                 "cooperation_rating", "last_contact", "remarks")
@@ -121,8 +119,8 @@ class Translator(Base):
             "low_error_count": self.low_error_count, "low_error_rate": _f(self.low_error_rate),
             "current_project": self.current_project, "role": self.role,
             "current_projects": getattr(self, "_cached_current_projects", []),
-            "daily_output": self.daily_output, "weekend_off": self.weekend_off,
-            "availability": self.availability, "cumulative_word_count": self.cumulative_word_count,
+            "daily_output": self.daily_output,
+            "cumulative_word_count": self.cumulative_word_count,
             "currency": self.currency, "payment_method": self.payment_method,
             "settlement_mode": self.settlement_mode,
             "invoice_type": self.invoice_type, "tax_deduction": self.tax_deduction,
@@ -139,8 +137,14 @@ class Translator(Base):
             "remarks": self.remarks,
             "computed_availability": getattr(self, "_computed_availability", None),
             "computed_load_pct": getattr(self, "_computed_load_pct", None),
+            "capacity_month": getattr(self, "_capacity_month", None),
+            "effective_availability": getattr(self, "_effective_availability", None),
+            "capacity_override_status": getattr(self, "_capacity_override_status", None),
+            "capacity_override_reason": getattr(self, "_capacity_override_reason", None),
             "availability_conflict": getattr(self, "_availability_conflict", False),
             "availability_basis": getattr(self, "_availability_basis", []),
+            "capacity_data_complete": getattr(self, "_capacity_data_complete", True),
+            "capacity_issues": getattr(self, "_capacity_issues", []),
             "aliases": getattr(self, "_cached_aliases", []),
         }
 
@@ -335,20 +339,34 @@ class Complaint(Base):
                 "resolution": self.resolution, "remarks": self.remarks}
 
 
-class Capacity(Base):
-    __tablename__ = "capacity_allocations"
+class CapacityMonthOverride(Base):
+    __tablename__ = "capacity_month_overrides"
+    __table_args__ = (
+        UniqueConstraint(
+            "translator_id",
+            "month",
+            name="uq_capacity_month_overrides_translator_month",
+        ),
+    )
     id: Mapped[int] = mapped_column(primary_key=True)
     translator_id: Mapped[int] = mapped_column(ForeignKey("translators.id"), index=True)
-    period_year: Mapped[int] = mapped_column(Integer)
-    period_month: Mapped[int] = mapped_column(Integer)
-    week_no: Mapped[int] = mapped_column(Integer)
-    project: Mapped[Optional[str]] = mapped_column(String(200))
-    occupancy_pct: Mapped[int] = mapped_column(Integer, default=0)
+    month: Mapped[str] = mapped_column(String(7), index=True)
+    status: Mapped[str] = mapped_column(String(20))
+    reason: Mapped[str] = mapped_column(Text)
+    updated_by: Mapped[Optional[str]] = mapped_column(String(50))
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
 
     def as_dict(self):
-        return {"id": self.id, "translator_id": self.translator_id, "period_year": self.period_year,
-                "period_month": self.period_month, "week_no": self.week_no, "project": self.project,
-                "occupancy_pct": self.occupancy_pct}
+        return {
+            "id": self.id,
+            "translator_id": self.translator_id,
+            "month": self.month,
+            "status": self.status,
+            "reason": self.reason,
+            "updated_by": self.updated_by,
+            "updated_at": self.updated_at.strftime("%Y-%m-%d %H:%M:%S")
+            if self.updated_at else None,
+        }
 
 
 class PaymentInfo(Base):

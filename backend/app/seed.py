@@ -3,7 +3,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from .db import engine
-from .models import (PO, Capacity, Complaint, Contract, LanguagePair,
+from .models import (PO, Complaint, Contract, LanguagePair,
                      PaymentAccount, PaymentInfo, ProjectPrice, QualityScore,
                      RateChange, Translator,
                      TranslatorProjectExperience)
@@ -23,7 +23,7 @@ def seed():
                        native_language="中文", onboarding_date="2025-01-01", source="推荐",
                        gender="male", entity_type="individual",
                        translation_rate=180, mtpe_rate=120, review_rate=90, status="Active",
-                       current_project="燕云", role="翻译", availability="健康",
+                       current_project="燕云", role="翻译", daily_output=3000,
                        domains="RPG,SLG", cat_tools="Trados,memoQ", currency="CNY", payment_method="银行转账",
                        contract_status="有效", contract_expiry="2026-12-31", nda_signed=True,
                        responsiveness="快", cooperation_rating="优先合作", punctuality_rate=98,
@@ -32,14 +32,14 @@ def seed():
                        native_language="中文", onboarding_date="2024-09-15", source="平台",
                        gender="female", entity_type="individual",
                        translation_rate=220, lqa_rate=80, status="Active",
-                       current_project="洛克王国", role="翻译", availability="饱和", domains="二次元,卡牌",
+                       current_project="洛克王国", role="翻译", daily_output=2500, domains="二次元,卡牌",
                        cat_tools="memoQ", currency="CNY", payment_method="支付宝", contract_status="有效",
                        contract_expiry="2026-09-15", nda_signed=True, responsiveness="快",
                        cooperation_rating="优先合作", punctuality_rate=95, last_contact="2026-06-24"),
             Translator(name="王伟", email="ww@example.com", translation_rate=150,
                        native_language="中文", onboarding_date="2025-07-10", source="主动联系", role="翻译",
                        gender="male", entity_type="individual",
-                       status="Dormant", availability="空闲", domains="MMO",
+                       status="Dormant", domains="MMO",
                        cat_tools="Trados", currency="CNY", contract_status="即将到期",
                        contract_expiry="2026-07-10", nda_signed=True, responsiveness="一般",
                        cooperation_rating="正常合作", punctuality_rate=88, last_contact="2026-03-01"),
@@ -47,7 +47,7 @@ def seed():
                        native_language="中文", onboarding_date="2026-01-20", source="推荐", role="审校",
                        gender="female", entity_type="individual",
                        translation_rate=130, review_rate=70, status="Probation",
-                       current_project="诺诺", availability="健康", domains="休闲", cat_tools="Phrase",
+                       current_project="诺诺", daily_output=2000, domains="休闲", cat_tools="Phrase",
                        currency="CNY", contract_status="有效", contract_expiry="2027-01-20",
                        responsiveness="一般", cooperation_rating="谨慎合作", punctuality_rate=80,
                        last_contact="2026-06-18"),
@@ -60,6 +60,8 @@ def seed():
                 translator_id=i["张明"], cooperation_source="our_company",
                 project_status="current", project_name="燕云", role="翻译",
                 source_lang="ZH", target_lang="EN",
+                start_date="2026-08-03", end_date="2026-08-14",
+                remaining_volume=30000, deadline="2026-08-14",
             ),
             TranslatorProjectExperience(
                 translator_id=i["张明"], cooperation_source="external",
@@ -72,10 +74,14 @@ def seed():
                 translator_id=i["李娜"], cooperation_source="our_company",
                 project_status="current", project_name="洛克王国", role="翻译",
                 source_lang="ZH", target_lang="JA",
+                start_date="2026-08-03", end_date="2026-08-31",
+                remaining_volume=50000, deadline="2026-08-31",
             ),
             TranslatorProjectExperience(
                 translator_id=i["陈静"], cooperation_source="our_company",
                 project_status="current", project_name="诺诺", role="审校",
+                start_date="2026-08-10", end_date="2026-08-28",
+                remaining_volume=24000, deadline="2026-08-28",
             ),
         ])
         s.add_all([
@@ -126,11 +132,6 @@ def seed():
         ])
         s.add(Complaint(translator_id=i["陈静"], date="2026-06-12", project="诺诺", complaint_type="质量不达标",
                         severity="一般", deduction_amount=200, resolution="已扣款", remarks="客户指出风格不一致"))
-        s.add_all([
-            Capacity(translator_id=i["张明"], period_year=2026, period_month=6, week_no=1, project="燕云", occupancy_pct=60),
-            Capacity(translator_id=i["张明"], period_year=2026, period_month=6, week_no=2, project="燕云", occupancy_pct=60),
-            Capacity(translator_id=i["李娜"], period_year=2026, period_month=6, week_no=1, project="洛克王国", occupancy_pct=100),
-        ])
         s.add(PaymentInfo(translator_id=i["张明"], currency="CNY", bank_name="招商银行",
                           bank_account_enc=enc("6225888812345678"), id_card_enc=enc("310101199001011234"),
                           payee_name="张明", supports_wechat=True))

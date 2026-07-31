@@ -10,11 +10,11 @@ from sqlalchemy.orm import Session
 from ..db import engine
 from ..file_storage import (IMAGE_EXTENSIONS, remove_stored, save_upload,
                             stored_path)
-from ..models import (Capacity, Complaint, Contract, LanguagePair,
+from ..models import (CapacityMonthOverride, Complaint, Contract, LanguagePair,
                       PaymentAccount, PaymentInfo, ProjectPrice, QualityScore,
                       RateChange, Translator, TranslatorAlias, TranslatorAttachment,
                       TranslatorProjectExperience)
-from ..schemas import (CapacityIn, ComplaintIn, ContractIn, LanguagePairIn,
+from ..schemas import (CapacityOverrideIn, ComplaintIn, ContractIn, LanguagePairIn,
                        PaymentAccountIn, PaymentIn, ProjectExperienceIn,
                        ProjectPriceIn, QualityIn, RateChangeIn, TranslatorIn)
 from ..schemas import TranslatorAliasIn
@@ -26,7 +26,8 @@ from ..services import (audit, availability_snapshot, find_language_pair,
                         resync_translator, svc_add_rate_change,
                         svc_add_project_experience,
                         svc_delete_project_experience,
-                        svc_update_project_experience, validate_language_pair)
+                        svc_update_project_experience, validate_language_pair,
+                        normalize_capacity_month)
 from ..translator_identity import (
     add_translator_alias,
     assert_name_not_reserved,
@@ -69,6 +70,7 @@ def list_translators(
     gender: str | None = None,
     entity_type: str | None = None,
     availability: str | None = None,
+    capacity_month: str | None = None,
     filters: str | None = None,
     page: int = 1,
     page_size: int = 50,
@@ -95,6 +97,10 @@ def list_translators(
     if page < 1 or page_size < 1 or page_size > 200:
         raise HTTPException(400, "分页参数非法")
     generic_conditions = parse_filter_conditions(filters)
+    try:
+        selected_capacity_month, _ = normalize_capacity_month(capacity_month)
+    except ValueError as error:
+        raise HTTPException(400, str(error)) from error
     with Session(engine) as s:
         rows = s.scalars(select(Translator).where(Translator.deleted_at.is_(None)).order_by(Translator.id)).all()
         tids = [r.id for r in rows]
@@ -128,6 +134,17 @@ def list_translators(
             ).all()
             for project in projects:
                 project_map.setdefault(project.translator_id, []).append(project)
+        capacity_override_map: dict[int, CapacityMonthOverride] = {}
+        if tids:
+            capacity_overrides = s.scalars(
+                select(CapacityMonthOverride).where(
+                    CapacityMonthOverride.translator_id.in_(tids),
+                    CapacityMonthOverride.month == selected_capacity_month,
+                )
+            ).all()
+            capacity_override_map = {
+                item.translator_id: item for item in capacity_overrides
+            }
         price_map: dict[int, list[ProjectPrice]] = {}
         if tids and rate_type in {"fixed", "custom"}:
             prices = s.scalars(
@@ -156,7 +173,12 @@ def list_translators(
         for r in rows:
             translator_pairs = lp_map.get(r.id, [])
             translator_projects = project_map.get(r.id, [])
-            snapshot = availability_snapshot(r, translator_projects)
+            snapshot = availability_snapshot(
+                r,
+                translator_projects,
+                month=selected_capacity_month,
+                override=capacity_override_map.get(r.id),
+            )
             r._cached_lp = ", ".join(
                 f"{pair.source_lang}→{pair.target_lang}" for pair in translator_pairs
             )
@@ -168,8 +190,20 @@ def list_translators(
             ]
             r._computed_availability = snapshot["computed_availability"]
             r._computed_load_pct = snapshot["computed_load_pct"]
+            r._capacity_month = snapshot["capacity_month"]
+            r._effective_availability = snapshot["effective_availability"]
+            r._capacity_override_status = (
+                snapshot["capacity_override"]["status"]
+                if snapshot["capacity_override"] else None
+            )
+            r._capacity_override_reason = (
+                snapshot["capacity_override"]["reason"]
+                if snapshot["capacity_override"] else None
+            )
             r._availability_conflict = snapshot["availability_conflict"]
             r._availability_basis = snapshot["availability_basis"]
+            r._capacity_data_complete = snapshot["capacity_data_complete"]
+            r._capacity_issues = snapshot["capacity_issues"]
 
             if (source_lang or target_lang) and not any(
                 _pair_matches(pair) for pair in translator_pairs
@@ -187,7 +221,7 @@ def list_translators(
                 continue
             if entity_type and r.entity_type != entity_type:
                 continue
-            effective_availability = snapshot["computed_availability"] or r.availability
+            effective_availability = snapshot["effective_availability"]
             if availability and effective_availability != availability:
                 continue
             if rate_type:
@@ -722,40 +756,119 @@ def delete_complaint(tid: int, cid: int, who: str = Depends(require_editor)):
         return {"ok": True}
 
 
-# ---------------- 产能（占用 + 可用率；利用率字段已删 0629）----------------
+# ---------------- 月度产能（项目字数自动分摊 + 按月人工修正）----------------
 @router.get("/translators/{tid}/capacity")
-def list_capacity(tid: int):
+def get_capacity(tid: int, month: str | None = None):
     with Session(engine) as s:
-        rows = s.scalars(select(Capacity).where(Capacity.translator_id == tid)
-                         .order_by(Capacity.period_year, Capacity.period_month, Capacity.week_no)).all()
-        by_week = {}
-        for r in rows:
-            by_week.setdefault((r.period_year, r.period_month, r.week_no), 0)
-            by_week[(r.period_year, r.period_month, r.week_no)] += r.occupancy_pct
-        weeks = [{"period": f"{y}-{mo:02d} W{w}", "occupancy": occ, "available": 100 - occ}
-                 for (y, mo, w), occ in sorted(by_week.items())]
-        return {"rows": [r.as_dict() for r in rows], "weeks": weeks}
+        translator = get_translator(s, tid)
+        try:
+            selected_month, _ = normalize_capacity_month(month)
+        except ValueError as error:
+            raise HTTPException(400, str(error)) from error
+        projects = s.scalars(
+            select(TranslatorProjectExperience).where(
+                TranslatorProjectExperience.translator_id == tid,
+                TranslatorProjectExperience.project_status == "current",
+            )
+        ).all()
+        override = s.scalar(
+            select(CapacityMonthOverride).where(
+                CapacityMonthOverride.translator_id == tid,
+                CapacityMonthOverride.month == selected_month,
+            )
+        )
+        return availability_snapshot(
+            translator,
+            projects,
+            month=selected_month,
+            override=override,
+        )
 
 
-@router.post("/translators/{tid}/capacity")
-def add_capacity(tid: int, body: CapacityIn, w=Depends(require_writer)):
-    role, name = w
+@router.put("/translators/{tid}/capacity/override")
+def upsert_capacity_override(
+    tid: int,
+    body: CapacityOverrideIn,
+    month: str,
+    w=Depends(require_writer),
+):
+    _, name = w
     with Session(engine) as s:
-        get_translator(s, tid)
-        s.add(Capacity(translator_id=tid, **body.model_dump()))
-        audit(s, name, "新增", "产能", tid, f"{body.period_year}-{body.period_month} W{body.week_no} {body.occupancy_pct}%")
+        translator = get_translator(s, tid)
+        try:
+            selected_month, _ = normalize_capacity_month(month)
+        except ValueError as error:
+            raise HTTPException(400, str(error)) from error
+        row = s.scalar(
+            select(CapacityMonthOverride).where(
+                CapacityMonthOverride.translator_id == tid,
+                CapacityMonthOverride.month == selected_month,
+            )
+        )
+        if row is None:
+            row = CapacityMonthOverride(
+                translator_id=tid,
+                month=selected_month,
+            )
+            s.add(row)
+        row.status = body.status
+        row.reason = body.reason
+        row.updated_by = name
+        row.updated_at = datetime.now()
+        audit(
+            s,
+            name,
+            "人工修正",
+            "月度产能",
+            tid,
+            f"{selected_month} {body.status}：{body.reason}",
+        )
         s.commit()
-        return {"ok": True}
+        s.refresh(row)
+        projects = s.scalars(
+            select(TranslatorProjectExperience).where(
+                TranslatorProjectExperience.translator_id == tid,
+                TranslatorProjectExperience.project_status == "current",
+            )
+        ).all()
+        return availability_snapshot(
+            translator,
+            projects,
+            month=selected_month,
+            override=row,
+        )
 
 
-@router.delete("/translators/{tid}/capacity/{cid}")
-def delete_capacity(tid: int, cid: int, who: str = Depends(require_editor)):
+@router.delete("/translators/{tid}/capacity/override")
+def delete_capacity_override(
+    tid: int,
+    month: str,
+    w=Depends(require_writer),
+):
+    _, name = w
     with Session(engine) as s:
-        c = child_or_404(s, Capacity, tid, cid, "产能")
-        audit(s, who, "删除", "产能", tid, f"{c.period_year}-{c.period_month} W{c.week_no} {c.occupancy_pct}%")
-        s.delete(c)
+        translator = get_translator(s, tid)
+        try:
+            selected_month, _ = normalize_capacity_month(month)
+        except ValueError as error:
+            raise HTTPException(400, str(error)) from error
+        row = s.scalar(
+            select(CapacityMonthOverride).where(
+                CapacityMonthOverride.translator_id == tid,
+                CapacityMonthOverride.month == selected_month,
+            )
+        )
+        if row:
+            s.delete(row)
+            audit(s, name, "清除人工修正", "月度产能", tid, selected_month)
         s.commit()
-        return {"ok": True}
+        projects = s.scalars(
+            select(TranslatorProjectExperience).where(
+                TranslatorProjectExperience.translator_id == tid,
+                TranslatorProjectExperience.project_status == "current",
+            )
+        ).all()
+        return availability_snapshot(translator, projects, month=selected_month)
 
 
 # ---------------- 支付信息（加密 + 脱敏）----------------

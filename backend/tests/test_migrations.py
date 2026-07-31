@@ -11,6 +11,7 @@ from sqlalchemy.orm import Session
 
 from app.models import (
     Base,
+    CapacityMonthOverride,
     Translator,
     TranslatorAlias,
     TranslatorProjectExperience,
@@ -21,10 +22,10 @@ PROJECT_ROOT = Path(__file__).resolve().parents[2]
 BACKEND_DIR = PROJECT_ROOT / "backend"
 ALEMBIC_CONFIG = BACKEND_DIR / "alembic.ini"
 INITIAL_REVISION = "20260717_0001"
-HEAD_REVISION = "20260731_0006"
+HEAD_REVISION = "20260731_0007"
 EXPECTED_TABLES = {
     "audit_logs",
-    "capacity_allocations",
+    "capacity_month_overrides",
     "complaints",
     "contracts",
     "language_pairs",
@@ -97,10 +98,40 @@ def assert_profile_schema(engine):
     translator_columns = {
         item["name"]: item for item in inspector.get_columns("translators")
     }
+    assert "availability" not in translator_columns
+    assert "weekend_off" not in translator_columns
     assert translator_columns["gender"]["nullable"]
     assert translator_columns["entity_type"]["nullable"]
     assert not translator_columns["settlement_mode"]["nullable"]
     assert {"manual_rating", "manual_rating_reason"} <= set(translator_columns)
+
+    capacity_columns = {
+        item["name"]: item
+        for item in inspector.get_columns("capacity_month_overrides")
+    }
+    assert set(capacity_columns) == {
+        "id", "translator_id", "month", "status", "reason", "updated_by",
+        "updated_at",
+    }
+    for required in (
+        "id", "translator_id", "month", "status", "reason", "updated_at"
+    ):
+        assert not capacity_columns[required]["nullable"]
+    capacity_indexes = {
+        item["name"]
+        for item in inspector.get_indexes("capacity_month_overrides")
+    }
+    assert capacity_indexes == {
+        "ix_capacity_month_overrides_month",
+        "ix_capacity_month_overrides_translator_id",
+    }
+    capacity_unique = {
+        item["name"]: item
+        for item in inspector.get_unique_constraints("capacity_month_overrides")
+    }
+    assert capacity_unique[
+        "uq_capacity_month_overrides_translator_month"
+    ]["column_names"] == ["translator_id", "month"]
 
     experience_columns = {
         item["name"]: item
@@ -244,10 +275,10 @@ def check_initial_revision_upgrade_round_trip(tmpdir):
         conn.execute(text("""
             INSERT INTO translators
                 (id, name, status, low_error_count, current_project, role,
-                 cumulative_word_count, cumulative_unpaid, complaint_count,
+                 availability, cumulative_word_count, cumulative_unpaid, complaint_count,
                  deduction_total)
             VALUES
-                (7, '保留数据', 'Active', 0, '旧当前项目', '翻译', 0, 0, 0, 0)
+                (7, '保留数据', 'Active', 0, '旧当前项目', '翻译', '健康', 0, 0, 0, 0)
         """))
 
     result = run(
@@ -284,6 +315,14 @@ def check_initial_revision_upgrade_round_trip(tmpdir):
         assert translator.gender is None
         assert translator.entity_type is None
         assert translator.as_dict()["current_project"] == "旧当前项目"
+        override = session.scalar(
+            select(CapacityMonthOverride).where(
+                CapacityMonthOverride.translator_id == 7
+            )
+        )
+        assert override is not None
+        assert override.status == "健康"
+        assert override.reason == "由旧全局人工档期迁移"
         session.add(TranslatorAlias(
             translator_id=7,
             alias="Legacy Name",
@@ -335,6 +374,9 @@ def check_initial_revision_upgrade_round_trip(tmpdir):
         assert conn.scalar(
             text("SELECT current_project FROM translators WHERE id = 7")
         ) == "旧当前项目"
+        assert conn.scalar(
+            text("SELECT availability FROM translators WHERE id = 7")
+        ) == "部分空闲"
         assert conn.scalar(text("PRAGMA integrity_check")) == "ok"
         assert conn.scalar(text("SELECT version_num FROM alembic_version")) == INITIAL_REVISION
 

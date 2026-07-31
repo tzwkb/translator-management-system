@@ -20,8 +20,8 @@ Translator lifecycle, capability, rate, settlement, and risk management system f
 - Translator master records with grouped detail UI, gender, and individual/vendor type.
 - Multiple current or past project experiences per translator, with internal/external cooperation source.
 - Per-language-pair rates with fixed language-code options and free source/target combination.
-- Fixed-price and custom project prices, plus rate-change, quality, contract, complaint, and capacity records; quality ratings use cumulative LQE scores with an auditable manual override.
-- Monthly capacity uses translation output × 20 workdays, defaults to 2,000 units/day, and reports idle/healthy/saturated/warning thresholds.
+- Translation, review, fixed-price, and custom project prices, plus rate-change, quality, contract, complaint, and capacity records; quality ratings use cumulative LQE scores with an auditable manual override.
+- Monthly capacity is selected by month and calculated from current-project remaining words, distributed across the remaining Monday–Friday schedule; it uses translation output × 20, defaults to 2,000 units/day, supports reasoned month-specific status overrides, and has no manual occupancy-percentage ledger.
 - Translator and PO grids use one Excel-style filtering workflow with value search, multi-select, blank values, typed text/number/date conditions, cross-column AND filtering, sorting, active-filter chips, and one-click clearing.
 - A searchable “More fields” header covers non-visible translator, related-business, and PO source fields with up to 20 combined conditions, including exact and ranged price filters.
 - PO settlement supports latest project-price matching, per-1k, hourly, fixed, and manual pricing, full manual correction, unpaid detail, and monthly/cumulative summaries.
@@ -95,7 +95,7 @@ python3 translator-mgmt-agent/test_client_payloads.py
 git diff --check
 ```
 
-Current acceptance baseline: `142/142`; LQE-rating boundaries `13/13`; monthly-capacity thresholds `6/6`; twelve frontend static test scripts.
+Current acceptance baseline: `146/146`; LQE-rating boundaries `13/13`; monthly-capacity thresholds `6/6` plus cross-month allocation and data-integrity cases; twelve frontend static test scripts.
 
 ## Remaining Work
 

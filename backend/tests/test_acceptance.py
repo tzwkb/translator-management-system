@@ -14,6 +14,7 @@ import subprocess
 import sys
 import tempfile
 import time
+from calendar import monthrange
 from datetime import date, timedelta
 from pathlib import Path
 from urllib.parse import urlencode
@@ -197,8 +198,12 @@ def main():
     chk("登录不存在用户404", code(lambda: req("POST", "/api/login", {"user": "鬼"})) == 404)
     chk("坏token写403", code(lambda: req("POST", "/api/translators", {"name": "X"}, token="bad")) == 403)
     chk("无token写403", code(lambda: req("POST", "/api/translators", {"name": "X"})) == 403)
-    chk("boss写403", code(lambda: req("POST", "/api/translators/1/capacity",
-        {"period_year": 2026, "period_month": 6, "week_no": 1, "occupancy_pct": 1}, token=BT)) == 403)
+    chk("boss写403", code(lambda: req(
+        "PUT",
+        "/api/translators/1/capacity/override?month=2026-08",
+        {"status": "健康", "reason": "权限测试"},
+        token=BT,
+    )) == 403)
     chk("agent不能批准403", code(lambda: req("POST", "/api/pending/1/approve", token=AT)) == 403)
     chk("viewer看审计403", code(lambda: req("GET", "/api/audit", token=BT)) == 403)
 
@@ -404,6 +409,8 @@ def main():
             "external_company": "外部公司",
             "role": "审校",
             "start_date": "2026-06-01",
+            "remaining_volume": 6000,
+            "deadline": "2026-08-15",
         },
         token=ET,
     )
@@ -552,6 +559,9 @@ def main():
                 "cooperation_source": "our_company",
                 "project_status": "current",
                 "project_name": "不存在",
+                "start_date": "2026-08-01",
+                "remaining_volume": 1000,
+                "deadline": "2026-08-31",
             },
             token=ET,
         )) == 404)
@@ -562,6 +572,9 @@ def main():
                 "cooperation_source": "our_company",
                 "project_status": "current",
                 "project_name": "只读写入",
+                "start_date": "2026-08-01",
+                "remaining_volume": 1000,
+                "deadline": "2026-08-31",
             },
             token=BT,
         )) == 403)
@@ -572,6 +585,9 @@ def main():
                 "cooperation_source": "our_company",
                 "project_status": "current",
                 "project_name": "Agent写入",
+                "start_date": "2026-08-01",
+                "remaining_volume": 1000,
+                "deadline": "2026-08-31",
             },
             token=AT,
         )) == 403)
@@ -583,6 +599,9 @@ def main():
                 "cooperation_source": "our_company",
                 "project_status": "current",
                 "project_name": "只读编辑",
+                "start_date": "2026-08-01",
+                "remaining_volume": 1000,
+                "deadline": "2026-08-31",
             },
             token=BT,
         )) == 403)
@@ -600,6 +619,9 @@ def main():
                 "cooperation_source": "our_company",
                 "project_status": "current",
                 "project_name": "跨译员",
+                "start_date": "2026-08-01",
+                "remaining_volume": 1000,
+                "deadline": "2026-08-31",
             },
             token=ET,
         )) == 404)
@@ -654,6 +676,9 @@ def main():
                 "project_name": "非法语言码",
                 "source_lang": "XX",
                 "target_lang": "EN",
+                "start_date": "2026-08-01",
+                "remaining_volume": 1000,
+                "deadline": "2026-08-31",
             },
             token=ET,
         )) == 400)
@@ -781,15 +806,36 @@ def main():
     chk("待审期间主表未变", [t for t in req("GET", "/api/translators")[1] if t["id"] == 1][0]["translation_rate"] == before_agent_rate)
     req("POST", f"/api/pending/{pr['pending_id']}/reject", token=ET)
     chk("驳回后待审清空", len(req("GET", "/api/pending", token=ET)[1]) == 0)
-    req("POST", "/api/translators/1/capacity", {"period_year": 2026, "period_month": 6, "week_no": 2, "project": "agent", "occupancy_pct": 30}, token=AT)
-    chk("agent档期直接落", any(w["period"] == "2026-06 W2" for w in req("GET", "/api/translators/1/capacity")[1]["weeks"]))
+    req(
+        "PUT",
+        "/api/translators/1/capacity/override?month=2026-08",
+        {"status": "健康", "reason": "Agent 已人工确认"},
+        token=AT,
+    )
+    agent_capacity = req(
+        "GET", "/api/translators/1/capacity?month=2026-08",
+    )[1]
+    chk(
+        "agent可按月修正档期且不录入百分比",
+        agent_capacity.get("capacity_override", {}).get("status") == "健康"
+        and "occupancy_pct" not in json.dumps(agent_capacity, ensure_ascii=False),
+        agent_capacity,
+    )
 
     print("=== F 优化校验（枚举/唯一性）===")
     chk("非法译员状态422", code(lambda: req("POST", "/api/translators", {"name": "状态X", "status": "乱", "native_language": "中文", "onboarding_date": "2025-01-01"}, token=ET)) == 422)
     chk("非法入库日期422", code(lambda: req("POST", "/api/translators", {"name": "日期X", "native_language": "中文", "onboarding_date": "2025-01-32"}, token=ET)) == 422)
     chk("非法邮箱422", code(lambda: req("POST", "/api/translators", {"name": "邮箱X", "email": "bad-email", "native_language": "中文", "onboarding_date": "2025-01-01"}, token=ET)) == 422)
     chk("非法PO结算月422", code(lambda: req("POST", "/api/po", {"translator_id": 1, "settlement_month": "2026-13"}, token=ET)) == 422)
-    chk("非法产能占用422", code(lambda: req("POST", "/api/translators/1/capacity", {"period_year": 2026, "period_month": 6, "week_no": 1, "occupancy_pct": 101}, token=ET)) == 422)
+    chk("非法产能月份400", code(lambda: req("GET", "/api/translators/1/capacity?month=2026-13")) == 400)
+    chk("非法月度修正状态422", code(lambda: req(
+        "PUT", "/api/translators/1/capacity/override?month=2026-08",
+        {"status": "满负荷", "reason": "测试"}, token=ET,
+    )) == 422)
+    chk("月度修正缺原因422", code(lambda: req(
+        "PUT", "/api/translators/1/capacity/override?month=2026-08",
+        {"status": "健康", "reason": ""}, token=ET,
+    )) == 422)
     chk("非法客诉严重度422", code(lambda: req("POST", "/api/translators/1/complaints", {"severity": "乱"}, token=ET)) == 422)
     chk("重复合同编号400", code(lambda: req("POST", "/api/translators/1/contracts", {"contract_number": "C-2025-011"}, token=ET)) == 400)
     chk("重复PO号400", code(lambda: req("POST", "/api/po", {"translator_id": 1, "settlement_month": "2026-07", "po_number": "PO-202606-001"}, token=ET)) == 400)
@@ -846,12 +892,21 @@ def main():
     req("DELETE", f"/api/translators/{did}/complaints/{cp_id}", token=ET)
     dc = tr(did)
     chk("删除客诉后重算次数扣款", dc["complaint_count"] == 0 and dc["deduction_total"] == 0, dc)
-    req("POST", f"/api/translators/{did}/capacity",
-        {"period_year": 2026, "period_month": 7, "week_no": 1, "project": "A", "occupancy_pct": 30},
-        token=ET)
-    cap_id = req("GET", f"/api/translators/{did}/capacity")[1]["rows"][0]["id"]
-    req("DELETE", f"/api/translators/{did}/capacity/{cap_id}", token=ET)
-    chk("删除产能后列表为空", req("GET", f"/api/translators/{did}/capacity")[1]["rows"] == [])
+    req(
+        "PUT",
+        f"/api/translators/{did}/capacity/override?month=2026-08",
+        {"status": "空闲", "reason": "删除回归"},
+        token=ET,
+    )
+    req(
+        "DELETE",
+        f"/api/translators/{did}/capacity/override?month=2026-08",
+        token=ET,
+    )
+    chk(
+        "清除按月人工修正后恢复自动状态",
+        req("GET", f"/api/translators/{did}/capacity?month=2026-08")[1]["capacity_override"] is None,
+    )
     req("PUT", f"/api/translators/{did}/payment",
         {"currency": "CNY", "bank_name": "测试银行", "bank_account": "6222000011112222", "payee_name": "删除校验"},
         token=ET)
@@ -870,8 +925,6 @@ def main():
         "gender": "female",
         "entity_type": "individual",
         "daily_output": 3000,
-        "weekend_off": True,
-        "availability": "空闲",
         "settlement_mode": "cumulative",
     }
     _, filter_translator = req(
@@ -933,7 +986,13 @@ def main():
         },
         token=ET,
     )
-    deadline = (date.today() + timedelta(days=2)).isoformat()
+    next_year = date.today().year + (1 if date.today().month == 12 else 0)
+    next_month = 1 if date.today().month == 12 else date.today().month + 1
+    capacity_month = f"{next_year:04d}-{next_month:02d}"
+    capacity_start = date(next_year, next_month, 1).isoformat()
+    deadline = date(
+        next_year, next_month, monthrange(next_year, next_month)[1],
+    ).isoformat()
     req(
         "POST", f"/api/translators/{filter_tid}/project-experiences",
         {
@@ -943,6 +1002,7 @@ def main():
             "role": "翻译",
             "source_lang": "ZH",
             "target_lang": "EN",
+            "start_date": capacity_start,
             "remaining_volume": 300000,
             "deadline": deadline,
         },
@@ -957,18 +1017,29 @@ def main():
             "role": "LQA",
             "source_lang": "ZH",
             "target_lang": "EN",
+            "start_date": capacity_start,
             "remaining_volume": 30,
             "deadline": deadline,
         },
         token=ET,
     )
+    req(
+        "PUT",
+        f"/api/translators/{filter_tid}/capacity/override?month={capacity_month}",
+        {"status": "空闲", "reason": "人工确认本月不再接新项目"},
+        token=ET,
+    )
     computed = next(
-        item for item in req("GET", "/api/translators")[1]
+        item for item in req(
+            "GET", f"/api/translators?capacity_month={capacity_month}",
+        )[1]
         if item["id"] == filter_tid
     )
     chk(
         "档期按月度项目量和日产能计算并提示人工冲突",
         computed.get("computed_availability") == "警告"
+        and computed.get("effective_availability") == "空闲"
+        and computed.get("capacity_month") == capacity_month
         and computed.get("availability_conflict") is True
         and len(computed.get("availability_basis", [])) == 2,
         computed,
@@ -983,6 +1054,19 @@ def main():
         and basis_by_role["LQA"]["daily_capacity"] == 3000
         and basis_by_role["LQA"]["monthly_capacity"] == 60000,
         basis_by_role,
+    )
+    monthly_capacity = req(
+        "GET",
+        f"/api/translators/{filter_tid}/capacity?month={capacity_month}",
+    )[1]
+    chk(
+        "指定月份返回逐项目字数分摊且无手填占用百分比",
+        monthly_capacity.get("allocated_words") == 300030
+        and monthly_capacity.get("monthly_capacity") == 60000
+        and monthly_capacity.get("capacity_data_complete") is True
+        and all("allocated_words" in row for row in monthly_capacity.get("availability_basis", []))
+        and "occupancy_pct" not in json.dumps(monthly_capacity, ensure_ascii=False),
+        monthly_capacity,
     )
 
     query = urlencode({
@@ -1061,12 +1145,45 @@ def main():
         },
         token=ET,
     )
+    _, translation_project_price = req(
+        "POST", f"/api/translators/{filter_tid}/project-prices",
+        {
+            "project_name": "角色项目",
+            "source_lang": "ZH",
+            "target_lang": "EN",
+            "price_type": "translation",
+            "amount": 260,
+            "unit": "per_1000",
+            "currency": "CNY",
+        },
+        token=ET,
+    )
+    _, review_project_price = req(
+        "POST", f"/api/translators/{filter_tid}/project-prices",
+        {
+            "project_name": "角色项目",
+            "source_lang": "ZH",
+            "target_lang": "EN",
+            "price_type": "review",
+            "amount": 160,
+            "unit": "per_1000",
+            "currency": "CNY",
+        },
+        token=ET,
+    )
     chk(
-        "一口价和自定义其他价格可独立保存",
+        "翻译、审校、一口价和自定义其他价格可独立保存",
         fixed_price.get("task_type") == "一口价"
         and fixed_price.get("amount") == 1200
-        and custom_price.get("custom_task_name") == "音频逐条检查",
-        {"fixed": fixed_price, "custom": custom_price},
+        and custom_price.get("custom_task_name") == "音频逐条检查"
+        and translation_project_price.get("task_type") == "翻译"
+        and review_project_price.get("task_type") == "审校",
+        {
+            "translation": translation_project_price,
+            "review": review_project_price,
+            "fixed": fixed_price,
+            "custom": custom_price,
+        },
     )
     _, updated_fixed_price = req(
         "PUT",
@@ -1142,6 +1259,38 @@ def main():
         and auto_fixed_po.get("pricing_mode") == "fixed"
         and auto_fixed_po.get("amount") == 1300,
         {"match": price_match, "po": auto_fixed_po},
+    )
+    _, translation_price_match = req(
+        "GET",
+        "/api/po/price-match?" + urlencode({
+            "translator_id": filter_tid,
+            "project": "角色项目",
+            "role": "翻译",
+            "source_lang": "ZH",
+            "target_lang": "EN",
+            "currency": "CNY",
+        }),
+    )
+    _, review_price_match = req(
+        "GET",
+        "/api/po/price-match?" + urlencode({
+            "translator_id": filter_tid,
+            "project": "角色项目",
+            "role": "审校",
+            "source_lang": "ZH",
+            "target_lang": "EN",
+            "currency": "CNY",
+        }),
+    )
+    chk(
+        "PO优先匹配翻译和审校项目价格",
+        translation_price_match.get("source") == "project_price"
+        and translation_price_match.get("project_price_id") == translation_project_price["id"]
+        and translation_price_match.get("rate") == 260
+        and review_price_match.get("source") == "project_price"
+        and review_price_match.get("project_price_id") == review_project_price["id"]
+        and review_price_match.get("rate") == 160,
+        {"translation": translation_price_match, "review": review_price_match},
     )
     chk(
         "自定义其他价格缺任务名称422",

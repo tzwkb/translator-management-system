@@ -1,5 +1,8 @@
 """业务逻辑层：审计、汇总同步、PO、待审。HTTP 路由与"批准后执行"共用这一套。"""
 import json
+import re
+from calendar import monthrange
+from datetime import date, datetime, timedelta
 
 from fastapi import HTTPException
 from sqlalchemy import select, update
@@ -381,49 +384,174 @@ def resync_translator(s, tid):
         t.negotiation_status = "未启动"
 
 
-def availability_snapshot(translator, projects, today=None):
-    """按当前项目量和固定 20 个工作日计算月度产能，不覆盖人工档期。"""
-    total_load = 0.0
-    basis = []
+def normalize_capacity_month(value=None, today=None):
+    as_of = today or date.today()
+    if isinstance(as_of, datetime):
+        as_of = as_of.date()
+    elif isinstance(as_of, str):
+        as_of = date.fromisoformat(as_of)
+    month = value or as_of.strftime("%Y-%m")
+    if not re.fullmatch(r"\d{4}-\d{2}", str(month)):
+        raise ValueError("月份格式应为 YYYY-MM")
+    year, month_number = map(int, str(month).split("-"))
+    if not 1 <= year <= 9999:
+        raise ValueError("年份不存在")
+    if not 1 <= month_number <= 12:
+        raise ValueError("月份不存在")
+    return f"{year:04d}-{month_number:02d}", as_of
+
+
+def _work_days(start, end):
+    if end < start:
+        return 0
+    return sum(
+        1
+        for offset in range((end - start).days + 1)
+        if (start + timedelta(days=offset)).weekday() < 5
+    )
+
+
+def _capacity_status(load_pct):
+    if load_pct < 50:
+        return "空闲"
+    if load_pct < 80:
+        return "健康"
+    if load_pct <= 100:
+        return "饱和"
+    return "警告"
+
+
+def availability_snapshot(translator, projects, month=None, override=None, today=None):
+    """把剩余字数按项目剩余工作日均匀分摊到指定月份。"""
+    selected_month, as_of = normalize_capacity_month(month, today)
+    year, month_number = map(int, selected_month.split("-"))
+    month_start = date(year, month_number, 1)
+    month_end = date(year, month_number, monthrange(year, month_number)[1])
     daily_capacity = float(translator.daily_output or DEFAULT_DAILY_OUTPUT)
     monthly_capacity = daily_capacity * MONTHLY_WORK_DAYS
-    for project in projects:
-        if project.project_status != "current":
-            continue
+    total_allocated = 0.0
+    basis = []
+    issues = []
+    current_projects = [
+        project for project in projects if project.project_status == "current"
+    ]
+    historical_month = month_end < as_of.replace(day=1)
+    if historical_month:
+        issues.append({
+            "project_id": None,
+            "project_name": "所选月份",
+            "reason": "当前剩余字数无法回算历史月份",
+        })
+
+    for project in ([] if historical_month else current_projects):
+        missing = []
         if project.remaining_volume is None:
+            missing.append("剩余字数")
+        if not project.start_date:
+            missing.append("开始日期")
+        schedule_end_value = project.deadline or project.end_date
+        if not schedule_end_value:
+            missing.append("截止日期或结束日期")
+        if missing:
+            issues.append({
+                "project_id": project.id,
+                "project_name": project.project_name,
+                "reason": "缺少" + "、".join(missing),
+            })
             continue
-        role = project.role or "翻译"
+
+        try:
+            project_start = date.fromisoformat(project.start_date)
+            schedule_end = date.fromisoformat(schedule_end_value)
+        except (TypeError, ValueError):
+            issues.append({
+                "project_id": project.id,
+                "project_name": project.project_name,
+                "reason": "开始日期或截止/结束日期不合法",
+            })
+            continue
+        if schedule_end < project_start:
+            issues.append({
+                "project_id": project.id,
+                "project_name": project.project_name,
+                "reason": "截止/结束日期早于开始日期",
+            })
+            continue
         remaining = float(project.remaining_volume)
-        load_pct = remaining / max(1.0, monthly_capacity) * 100
-        total_load += load_pct
+        if remaining < 0:
+            issues.append({
+                "project_id": project.id,
+                "project_name": project.project_name,
+                "reason": "剩余字数不能为负数",
+            })
+            continue
+        allocation_start = max(project_start, as_of)
+        overdue = schedule_end < as_of and remaining > 0
+        allocation_end = as_of if overdue else schedule_end
+        total_work_days = 1 if overdue else _work_days(allocation_start, allocation_end)
+        if total_work_days == 0 and remaining > 0:
+            issues.append({
+                "project_id": project.id,
+                "project_name": project.project_name,
+                "reason": "剩余排期内没有周一至周五工作日",
+            })
+            continue
+
+        overlap_start = max(allocation_start, month_start)
+        overlap_end = min(allocation_end, month_end)
+        month_work_days = (
+            _work_days(overlap_start, overlap_end)
+            if overlap_start <= overlap_end else 0
+        )
+        allocated_words = (
+            0.0 if remaining == 0
+            else remaining if overdue and selected_month == as_of.strftime("%Y-%m")
+            else remaining * month_work_days / total_work_days
+        )
+        load_pct = allocated_words / monthly_capacity * 100
+        total_allocated += allocated_words
         basis.append({
             "project_id": project.id,
             "project_name": project.project_name,
-            "role": role,
-            "remaining_volume": remaining,
-            "deadline": project.deadline,
-            "work_days": MONTHLY_WORK_DAYS,
+            "role": project.role or "翻译",
+            "remaining_volume": round(remaining, 2),
+            "start_date": project.start_date,
+            "schedule_end": schedule_end_value,
+            "allocation_start": allocation_start.isoformat(),
+            "total_work_days": total_work_days,
+            "month_work_days": month_work_days,
+            "allocated_words": round(allocated_words, 2),
             "daily_capacity": daily_capacity,
             "monthly_capacity": monthly_capacity,
             "load_pct": round(load_pct, 2),
+            "overdue": overdue,
         })
-    computed = None
-    if basis:
-        if total_load < 50:
-            computed = "空闲"
-        elif total_load < 80:
-            computed = "健康"
-        elif total_load <= 100:
-            computed = "饱和"
-        else:
-            computed = "警告"
+
+    has_calculable_result = not historical_month and (
+        bool(basis) or not current_projects
+    )
+    total_load = total_allocated / monthly_capacity * 100
+    computed = _capacity_status(total_load) if has_calculable_result else None
+    override_status = override.status if override else None
+    effective = override_status or computed
     return {
+        "capacity_month": selected_month,
+        "as_of_date": as_of.isoformat(),
+        "daily_capacity": daily_capacity,
+        "monthly_work_days": MONTHLY_WORK_DAYS,
+        "monthly_capacity": monthly_capacity,
+        "allocated_words": round(total_allocated, 2),
         "computed_availability": computed,
-        "computed_load_pct": round(total_load, 2) if basis else None,
+        "computed_load_pct": round(total_load, 2) if has_calculable_result else None,
+        "available_pct": round(100 - total_load, 2) if has_calculable_result else None,
+        "effective_availability": effective,
+        "capacity_override": override.as_dict() if override else None,
         "availability_conflict": bool(
-            computed and translator.availability and computed != translator.availability
+            computed and override_status and computed != override_status
         ),
         "availability_basis": basis,
+        "capacity_data_complete": not issues,
+        "capacity_issues": issues,
     }
 
 

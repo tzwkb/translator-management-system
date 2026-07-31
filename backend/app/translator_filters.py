@@ -6,7 +6,7 @@ from fastapi import HTTPException
 from sqlalchemy import select
 
 from .models import (
-    Capacity,
+    CapacityMonthOverride,
     Complaint,
     Contract,
     LanguagePair,
@@ -45,10 +45,13 @@ _MAIN_FIELDS = [
     ("current_project", "旧当前项目", "text"),
     ("role", "旧当前角色", "text"),
     ("daily_output", "翻译日产量", "number"),
-    ("weekend_off", "是否双休", "boolean"),
-    ("availability", "人工产能状态", "text"),
+    ("capacity_month", "产能月份", "date"),
+    ("effective_availability", "所选月档期状态", "text"),
     ("computed_availability", "计算产能状态", "text"),
     ("computed_load_pct", "计算占用率", "number"),
+    ("capacity_override_status", "月度人工修正状态", "text"),
+    ("capacity_override_reason", "月度人工修正原因", "text"),
+    ("capacity_data_complete", "产能资料是否完整", "boolean"),
     ("cumulative_word_count", "累计字数", "number"),
     ("currency", "结算币种", "text"),
     ("payment_method", "旧支付方式", "text"),
@@ -141,12 +144,12 @@ _RELATED_FIELDS = {
         ("deduction_amount", "客诉·扣款", "number"),
         ("resolution", "客诉·处理结果", "text"),
     ],
-    "capacity": [
-        ("period_year", "旧产能·年份", "number"),
-        ("period_month", "旧产能·月份", "number"),
-        ("week_no", "旧产能·周次", "number"),
-        ("project", "旧产能·项目", "text"),
-        ("occupancy_pct", "旧产能·占用率", "number"),
+    "capacity_overrides": [
+        ("month", "产能修正·月份", "date"),
+        ("status", "产能修正·状态", "text"),
+        ("reason", "产能修正·原因", "text"),
+        ("updated_by", "产能修正·更新人", "text"),
+        ("updated_at", "产能修正·更新时间", "date"),
     ],
     "payments": [
         ("method", "支付·方式", "text"),
@@ -210,7 +213,7 @@ _RELATED_MODELS = {
     "quality": QualityScore,
     "contracts": Contract,
     "complaints": Complaint,
-    "capacity": Capacity,
+    "capacity_overrides": CapacityMonthOverride,
     "payments": PaymentAccount,
     "attachments": TranslatorAttachment,
     "po": PO,

@@ -64,8 +64,6 @@ IMPORT_FIELDS = [
     ("当前项目", "current_project", False, None),
     ("角色", "role", False, ["翻译", "审校", "MTPE", "LQA", "LQE", "一口价", "其他"]),
     ("日产字数", "daily_output", False, None),
-    ("是否双休", "weekend_off", False, ["是", "否"]),
-    ("档期", "availability", False, ["空闲", "健康", "饱和", "警告"]),
     ("结算币种", "currency", False, ["CNY", "USD", "EUR"]),
     ("支付方式", "payment_method", False, None),
     ("结算策略", "settlement_mode", False, ["monthly", "cumulative"]),
@@ -89,7 +87,7 @@ _HEADER_MAP.update({
     "译员ID": "id",
     "译员id": "id",
 })
-_BOOL_FIELDS = {"weekend_off", "nda_signed"}
+_BOOL_FIELDS = {"nda_signed"}
 _DATE_FIELDS = {
     "onboarding_date",
     "rate_confirmed_date",

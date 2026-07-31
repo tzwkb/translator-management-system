@@ -262,6 +262,7 @@
     <div class="cards" id="cards"></div>
     <div class="toolbar">
       <input class="search" id="search" placeholder="搜索姓名 / 语言对 / 项目">
+      <label class="excel-hint">档期月份 <input id="capacityMonth" type="month" onchange="changeCapacityMonth(this.value)"></label>
       <span class="excel-hint">表头筛选 · 更多字段可筛选未展示信息</span>
       <span class="count" id="count"></span>
       <button class="btn-ghost" onclick="exportTr()">导出 Excel</button>
@@ -279,7 +280,7 @@
       <th data-excel-grid="tr" data-excel-field="status">状态</th>
       <th data-excel-grid="tr" data-excel-field="internal_rating">评级</th>
       <th data-excel-grid="tr" data-excel-field="current_project">当前项目</th>
-      <th data-excel-grid="tr" data-excel-field="availability">档期</th>
+      <th data-excel-grid="tr" data-excel-field="effective_availability">档期</th>
       <th data-excel-grid="tr" data-excel-field="contract_expiry">合同到期</th>
       <th data-excel-grid="tr" data-excel-field="last_contact">最近联系</th>
       <th data-excel-more-grid="tr">更多字段</th>
@@ -421,8 +422,6 @@
     <div class="field"><label>试译结果</label><select id="f-trial_result"><option value="">—</option><option>Pass</option><option>Fail</option><option>Pending</option></select></div>
     <div class="grouphd">工作安排</div>
     <div class="field"><label>翻译日产字数</label><input id="f-daily_output" type="number" min="0" step="100" placeholder="未填按 2000"></div>
-    <div class="field"><label>是否双休</label><select id="f-weekend_off"><option value="">—</option><option value="true">是</option><option value="false">否</option></select></div>
-    <div class="field"><label>人工产能状态</label><select id="f-availability"><option value="">—</option><option>空闲</option><option>健康</option><option>饱和</option><option>警告</option></select></div>
     <div class="grouphd">财务信息</div>
     <div class="field"><label>结算币种</label><select id="f-currency"><option value="">—</option><option>CNY</option><option>USD</option><option>EUR</option></select></div>
     <div class="field"><label>支付方式</label><input id="f-payment_method" placeholder="银行转账/PayPal"></div>
@@ -484,10 +483,10 @@
 <script>
 const TRF = ["name","native_language","onboarding_date","email","wechat","location","timezone","status","source","gender","entity_type",
   "language_pairs","domains","text_types","cat_tools","internal_rating","manual_rating","manual_rating_reason","trial_result",
-  "current_project","role","daily_output","weekend_off","availability",
+  "current_project","role","daily_output",
   "currency","payment_method","settlement_mode","invoice_type","tax_deduction","contract_status","contract_expiry","nda_signed",
   "punctuality_rate","responsiveness","cooperation_rating","last_contact","remarks"];
-let DATA=[], PO_ROWS=[], PO_ALL_ROWS=[], PO_TRANSLATORS=[], PAIR_OPTIONS=[], LANG_OPTIONS=[], FILTER_FIELDS=[], CUR=null, TOKEN="", ROLE="editor", FILTER_QUERY="", PO_IMPORT_FILE=null, PO_FILTER_INITIALIZED=false;
+let DATA=[], PO_ROWS=[], PO_ALL_ROWS=[], PO_TRANSLATORS=[], PAIR_OPTIONS=[], LANG_OPTIONS=[], FILTER_FIELDS=[], CUR=null, TOKEN="", ROLE="editor", FILTER_QUERY="", CAPACITY_MONTH="", PO_IMPORT_FILE=null, PO_FILTER_INITIALIZED=false;
 const EXCEL_BLANK="__EXCEL_BLANK__";
 const EXCEL_FILTERS={tr:{},po:{}};
 const EXCEL_SORT={tr:null,po:null};
@@ -503,7 +502,7 @@ const EXCEL_COLUMNS={
     status:{label:"状态",kind:"text",value:row=>row.status,format:statusZh},
     internal_rating:{label:"评级",kind:"text",value:row=>row.internal_rating},
     current_project:{label:"当前项目",kind:"text",value:currentProjectText},
-    availability:{label:"档期",kind:"text",value:row=>row.computed_availability||row.availability},
+    effective_availability:{label:"档期",kind:"text",value:row=>row.effective_availability},
     contract_expiry:{label:"合同到期",kind:"date",value:row=>row.contract_expiry},
     last_contact:{label:"最近联系",kind:"date",value:row=>row.last_contact},
   },
@@ -1066,10 +1065,20 @@ function showTab(t) {
 }
 
 /* ---- 译员主表 ---- */
+function translatorListPath() {
+  const params=new URLSearchParams(FILTER_QUERY.replace(/^\?/,""));
+  params.set("capacity_month",CAPACITY_MONTH||month());
+  return `/api/translators?${params.toString()}`;
+}
+async function changeCapacityMonth(value) {
+  if(!isMonthValue(value))return failField("档期月份需为有效月份（YYYY-MM）");
+  CAPACITY_MONTH=value;
+  await load();
+}
 async function load() {
   const [ov, list, pairs, filterFields] = await Promise.all([
     get("/api/overview"),
-    get("/api/translators"+FILTER_QUERY),
+    get(translatorListPath()),
     get("/api/language-pair-options"),
     FILTER_FIELDS.length ? Promise.resolve(FILTER_FIELDS) : get("/api/translator-filter-fields"),
   ]);
@@ -1091,7 +1100,7 @@ async function load() {
   render();
 }
 function exportFiltered() {
-  const columns = ["name","native_language","language_pairs","internal_rating","domains","wechat","entity_type","gender","computed_availability","computed_load_pct"];
+  const columns = ["name","native_language","language_pairs","internal_rating","domains","wechat","entity_type","gender","capacity_month","effective_availability","computed_availability","computed_load_pct"];
   const visibleRows=applyExcelState("tr",translatorSearchRows());
   const csv = [columns.join(","), ...visibleRows.map(row=>columns.map(key=>`"${String(row[key]??"").replaceAll('"','""')}"`).join(","))].join("\n");
   const blob = new Blob(["\ufeff"+csv],{type:"text/csv;charset=utf-8"}), url=URL.createObjectURL(blob), a=document.createElement("a");
@@ -1119,11 +1128,13 @@ function render() {
   }).join("");
 }
 function availabilityHtml(t) {
-  const value = t.computed_availability || t.availability;
+  const value = t.effective_availability;
   if (!value) return m();
   const load = t.computed_load_pct==null ? "" : ` · ${fmt(t.computed_load_pct)}%`;
-  const conflict = t.availability_conflict ? ` <span class="conflict" title="人工档期：${esc(t.availability)}">⚠冲突</span>` : "";
-  return `${esc(value)}${load}${conflict}`;
+  const override = t.capacity_override_status ? ` <span title="人工修正：${esc(t.capacity_override_reason)}">· 人工</span>` : "";
+  const conflict = t.availability_conflict ? ` <span class="conflict" title="计算状态：${esc(t.computed_availability)}">⚠冲突</span>` : "";
+  const incomplete = t.capacity_data_complete ? "" : ` <span class="conflict" title="当前项目缺少字数或排期">⚠资料不全</span>`;
+  return `${esc(value)}${load}${override}${conflict}${incomplete}`;
 }
 function m(){return "<span class=muted>—</span>";}
 function daysTo(d){ if(!d) return null; const t=new Date(d+"T00:00:00"); if(isNaN(t)) return null; const n=new Date(); n.setHours(0,0,0,0); return Math.round((t-n)/86400000); }
@@ -1413,7 +1424,7 @@ async function renderDetailSummary() {
         </div>
       </div>
       <div class="profile-meta">
-        <span class="chip warn">${detailVal(CUR.computed_availability || CUR.availability)}${CUR.computed_load_pct==null?"":` · ${fmt(CUR.computed_load_pct)}%`}${CUR.availability_conflict?" ⚠人工冲突":""}</span>
+        <span class="chip warn">${detailVal(CUR.capacity_month)} · ${detailVal(CUR.effective_availability)}${CUR.computed_load_pct==null?"":` · ${fmt(CUR.computed_load_pct)}%`}${CUR.capacity_override_status?" · 人工修正":""}${CUR.availability_conflict?" ⚠冲突":""}${CUR.capacity_data_complete?"":" ⚠资料不全"}</span>
         <span class="chip">${detailVal(currentProjectText(CUR))}</span>
       </div>
     </div>
@@ -1435,11 +1446,13 @@ async function renderDetailSummary() {
       ${pairRateSection(languagePairs)}
       ${detailSection("项目与产能", [
         ["当前项目", currentProjectText(CUR)],
-        ["人工档期", CUR.availability],
+        ["档期月份", CUR.capacity_month],
+        ["有效档期", CUR.effective_availability],
         ["计算档期", CUR.computed_availability],
         ["计算负荷%", CUR.computed_load_pct],
+        ["人工修正", CUR.capacity_override_status],
         ["日产字数", CUR.daily_output],
-        ["最近联系", CUR.last_contact]
+        ["资料完整", CUR.capacity_data_complete ? "是" : "否"]
       ])}
       ${detailSection("合同与支付", [
         ["币种", CUR.currency],
@@ -1506,7 +1519,7 @@ function projectDates(project) {
 }
 function projectWorkload(project) {
   const parts = [];
-  if (project.remaining_volume != null) parts.push(`剩余 ${fmt(project.remaining_volume)}`);
+  if (project.remaining_volume != null) parts.push(`剩余 ${fmt(project.remaining_volume)} 字`);
   if (project.deadline) parts.push(`截止 ${project.deadline}`);
   return parts.join(" · ") || "—";
 }
@@ -1532,7 +1545,7 @@ function projectBlock(status, label, list) {
       <span class="count">${list.length} 条</span>
       <button class="btn-ghost edit-only" onclick="openProjectEditor('${status}')">+ 添加</button>
     </div>
-    ${tbl(["项目","合作来源","角色","语言对","项目周期","剩余量 / 截止","备注","操作"], projectRows(list))}
+    ${tbl(["项目","合作来源","角色","语言对","项目周期","剩余字数 / 截止","备注","操作"], projectRows(list))}
   </section>`;
 }
 async function subProjects() {
@@ -1591,17 +1604,18 @@ function openProjectEditor(status, projectId) {
     <h3>${project ? "编辑项目经历" : (data.project_status === "current" ? "新增当前项目" : "新增过往项目")}</h3>
     <div class="project-form">
       <input id="pe-id" type="hidden" value="${project?.id || ""}">
-      <div class="field"><label>项目状态 <span class="req">*</span></label><select id="pe-status">${projectOptions([["current","当前项目"],["past","过往项目"]],data.project_status)}</select></div>
+      <div class="field"><label>项目状态 <span class="req">*</span></label><select id="pe-status" onchange="toggleProjectCapacityRequirements()">${projectOptions([["current","当前项目"],["past","过往项目"]],data.project_status)}</select></div>
       <div class="field"><label>合作来源 <span class="req">*</span></label><select id="pe-source" onchange="toggleProjectCompany()">${projectOptions([["our_company","与我司合作"],["external","与别家合作"]],data.cooperation_source)}</select></div>
       <div class="field span-2"><label>项目名称 <span class="req">*</span></label><input id="pe-name" value="${esc(data.project_name||"")}"></div>
       <div class="field span-2" id="pe-company-wrap"><label>合作公司</label><input id="pe-company" value="${esc(data.external_company||"")}" placeholder="可填写公司或工作室名称"></div>
       <div class="field"><label>担任角色</label><select id="pe-role">${projectOptions([["翻译","翻译"],["审校","审校"],["MTPE","MTPE"],["LQA","LQA"],["LQE","LQE"],["其他","其他"]],data.role,"—")}</select></div>
-      <div class="field"><label>开始日期</label><input id="pe-start" type="date" value="${esc(data.start_date||"")}"></div>
+      <div class="field"><label>开始日期 <span class="req pe-capacity-required">*</span></label><input id="pe-start" type="date" value="${esc(data.start_date||"")}"></div>
       <div class="field"><label>源语言</label>${langInputHtml("pe-src","不指定",data.source_lang)}</div>
       <div class="field"><label>目标语言</label>${langInputHtml("pe-tgt","不指定",data.target_lang)}</div>
       <div class="field"><label>结束日期</label><input id="pe-end" type="date" value="${esc(data.end_date||"")}"></div>
-      <div class="field"><label>剩余量</label><input id="pe-volume" type="number" min="0" step="1" value="${data.remaining_volume??""}"></div>
-      <div class="field"><label>截止日期</label><input id="pe-deadline" type="date" value="${esc(data.deadline||"")}"></div>
+      <div class="field"><label>剩余字数 <span class="req pe-capacity-required">*</span></label><input id="pe-volume" type="number" min="0" step="1" value="${data.remaining_volume??""}"></div>
+      <div class="field"><label>截止日期</label><input id="pe-deadline" type="date" value="${esc(data.deadline||"")}" placeholder="与结束日期至少填一项"></div>
+      <div class="field full muted pe-capacity-required">当前项目必须填开始日期、剩余字数，并在“结束日期 / 截止日期”中至少填一项；系统按周一至周五均匀分摊到各月。</div>
       <div class="field full"><label>备注</label><textarea id="pe-remarks">${esc(data.remarks||"")}</textarea></div>
     </div>
     <div class="project-form-actions">
@@ -1610,12 +1624,17 @@ function openProjectEditor(status, projectId) {
     </div>
   </section>`;
   toggleProjectCompany();
+  toggleProjectCapacityRequirements();
   editor.scrollIntoView({behavior:"smooth", block:"nearest"});
 }
 function toggleProjectCompany() {
   const source = document.getElementById("pe-source");
   const wrap = document.getElementById("pe-company-wrap");
   if (source && wrap) wrap.style.display = source.value === "external" ? "" : "none";
+}
+function toggleProjectCapacityRequirements() {
+  const required=document.getElementById("pe-status")?.value==="current";
+  document.querySelectorAll(".pe-capacity-required").forEach(item=>item.style.display=required?"":"none");
 }
 function cancelProjectEditor() {
   const editor = document.getElementById("projectEditor");
@@ -1629,6 +1648,14 @@ async function saveProjectExperience() {
   if (!validDateField("pe-end", "结束日期", false)) return;
   if (!validDateField("pe-deadline", "截止日期", false)) return;
   if (!validRange("pe-volume", "剩余量", 0, null, false)) return;
+  const projectStatus=document.getElementById("pe-status").value;
+  if(projectStatus==="current") {
+    if(!val("pe-start"))return failField("当前项目必须填写开始日期");
+    if(num("pe-volume")==null)return failField("当前项目必须填写剩余字数");
+    if(!val("pe-end")&&!val("pe-deadline"))return failField("当前项目必须填写截止日期或结束日期");
+  }
+  const scheduleEnd=val("pe-deadline")||val("pe-end");
+  if(val("pe-start")&&scheduleEnd&&scheduleEnd<val("pe-start"))return failField("项目截止日期不能早于开始日期");
   const pair = readLangPair("pe-src", "pe-tgt");
   if (!!pair.source_lang !== !!pair.target_lang) return failField("源语言和目标语言需同时填写");
   if (pair.source_lang && (!LANG_OPTIONS.includes(pair.source_lang) || !LANG_OPTIONS.includes(pair.target_lang))) {
@@ -1638,7 +1665,7 @@ async function saveProjectExperience() {
   const cooperationSource = document.getElementById("pe-source").value;
   const body = {
     cooperation_source: cooperationSource,
-    project_status: document.getElementById("pe-status").value,
+    project_status: projectStatus,
     project_name: projectName,
     external_company: cooperationSource === "external" ? val("pe-company") : null,
     role: val("pe-role"),
@@ -1709,7 +1736,7 @@ async function addLang() {
 async function subPrices() {
   PROJECT_PRICES = await get(`/api/translators/${CUR.id}/project-prices`);
   const rows = PROJECT_PRICES.map(price=>`<tr>
-    <td>${esc(price.project_name)}</td><td>${price.price_type==="fixed"?"一口价":"其他"}</td>
+    <td>${esc(price.project_name)}</td><td>${projectPriceTypeLabel(price.price_type)}</td>
     <td>${esc(price.custom_task_name||price.task_type)||"—"}</td><td>${langPair(price)}</td>
     <td class="num">${fmt(price.amount)}</td><td>${esc(price.unit)}</td><td>${esc(price.currency)}</td>
     <td><button class="btn-link edit-only" onclick="editProjectPrice(${price.id})">编辑</button>${delBtn(`/api/translators/${CUR.id}/project-prices/${price.id}`,"prices","项目价格")}</td>
@@ -1718,7 +1745,7 @@ async function subPrices() {
     <div class="addrow edit-only">
       <input id="pp-id" type="hidden">
       <div class="field"><label>项目</label><input id="pp-project" style="width:130px"></div>
-      <div class="field"><label>类型</label><select id="pp-type" onchange="toggleProjectPriceType()"><option value="fixed">一口价</option><option value="custom">其他</option></select></div>
+      <div class="field"><label>类型</label><select id="pp-type" onchange="toggleProjectPriceType()"><option value="translation">翻译</option><option value="review">审校</option><option value="fixed">一口价</option><option value="custom">其他</option></select></div>
       <div class="field"><label>自定义任务</label><input id="pp-custom" style="width:120px" placeholder="其他时必填"></div>
       <div class="field"><label>源语言</label>${langInputHtml("pp-src","可选")}</div>
       <div class="field"><label>目标语言</label>${langInputHtml("pp-tgt","可选")}</div>
@@ -1729,10 +1756,14 @@ async function subPrices() {
     </div>`;
   toggleProjectPriceType();
 }
+function projectPriceTypeLabel(type) {
+  return {translation:"翻译",review:"审校",fixed:"一口价",custom:"其他"}[type]||type||"—";
+}
 function toggleProjectPriceType() {
   const type=document.getElementById("pp-type"), custom=document.getElementById("pp-custom"), unit=document.getElementById("pp-unit");
   if (!type||!custom||!unit) return;
-  custom.disabled=type.value==="fixed";
+  custom.disabled=type.value!=="custom";
+  if(custom.disabled) custom.value="";
   if(type.value==="fixed"&&!["project","task"].includes(unit.value)) unit.value="project";
 }
 function editProjectPrice(id) {
@@ -1961,33 +1992,66 @@ async function addComplaint() {
   if (!validRange("x-ded", "扣款", 0, null, false)) return;
   try { await api("POST",`/api/translators/${CUR.id}/complaints`, b); subComplaints(); } catch(e){}
 }
-async function subCapacity() {
-  const d = await get(`/api/translators/${CUR.id}/capacity`);
-  const weekMap = Object.fromEntries(d.weeks.map(w => [w.period, w]));
-  const rows = d.rows.map(c => {
-    const period = `${c.period_year}-${String(c.period_month).padStart(2,"0")} W${c.week_no}`;
-    const week = weekMap[period] || {available:"—"};
-    return `<tr><td>${esc(period)}</td><td>${esc(c.project)||"—"}</td><td class="num">${c.occupancy_pct}%</td><td class="num ${week.available<0?"amt-bad":""}">${week.available}%${week.available<0?" ⚠超负荷":""}</td><td>${delBtn(`/api/translators/${CUR.id}/capacity/${c.id}`,"capacity","产能")}</td></tr>`;
-  }).join("");
-  const basis=(CUR.availability_basis||[]).map(item=>`${esc(item.project_name)}：${fmt(item.load_pct)}%（${item.role}，翻译日产能 ${fmt(item.daily_capacity)}，月产能 ${fmt(item.monthly_capacity)}）`).join("；")||"当前项目未填写剩余量，沿用人工产能状态";
-  document.getElementById("detailBody").innerHTML = `<div class="secbox"><div class="kv"><b>月度产能状态</b>${detailVal(CUR.computed_availability)}</div><div class="kv"><b>月度占用率</b>${CUR.computed_load_pct==null?"—":fmt(CUR.computed_load_pct)+"%"}</div><div class="kv"><b>人工状态</b>${detailVal(CUR.availability)}${CUR.availability_conflict?' <span class="conflict">⚠冲突</span>':""}</div><div class="muted" style="margin-top:8px">阈值：&lt;50% 空闲；50%–&lt;80% 健康；80%–100% 饱和；&gt;100% 警告。${basis}</div></div><div class="muted" style="margin:10px 0 6px">旧周产能台账（兼容历史数据）</div>` + tbl(["周","项目","本记录占用","周可用率","操作"], rows) + `
-    <div class="addrow edit-only">
-      <div class="field"><label>年</label><input id="cp-y" type="number" min="1900" max="2100" value="2026" style="width:70px"></div>
-      <div class="field"><label>月</label><input id="cp-m" type="number" min="1" max="12" value="${(new Date()).getMonth()+1}" style="width:55px"></div>
-      <div class="field"><label>周(1-6)</label><input id="cp-w" type="number" min="1" max="6" value="1" style="width:60px"></div>
-      <div class="field"><label>项目</label><input id="cp-proj" style="width:100px"></div>
-      <div class="field"><label>占用%</label><input id="cp-occ" type="number" min="0" max="100" value="50" style="width:70px"></div>
-      <button class="btn-primary" onclick="addCapacity()">添加</button>
+async function subCapacity(selectedMonth) {
+  const activeMonth=selectedMonth||document.getElementById("capacity-detail-month")?.value||CUR.capacity_month||CAPACITY_MONTH||month();
+  const d=await get(`/api/translators/${CUR.id}/capacity?month=${encodeURIComponent(activeMonth)}`);
+  const rows=(d.availability_basis||[]).map(item=>`<tr>
+    <td><b>${esc(item.project_name)}</b>${item.overdue?' <span class="conflict">⚠逾期</span>':""}</td>
+    <td>${esc(item.role)}</td>
+    <td>${esc(item.allocation_start)} → ${esc(item.schedule_end)}</td>
+    <td class="num">${fmt(item.month_work_days)} / ${fmt(item.total_work_days)}</td>
+    <td class="num">${fmt(item.remaining_volume)}</td>
+    <td class="num">${fmt(item.allocated_words)}</td>
+    <td class="num">${fmt(item.load_pct)}%</td>
+  </tr>`).join("");
+  const issues=(d.capacity_issues||[]).map(item=>`<li><b>${esc(item.project_name)}</b>：${esc(item.reason)}</li>`).join("");
+  const override=d.capacity_override;
+  document.getElementById("detailBody").innerHTML=`
+    <div class="toolbar" style="margin-bottom:10px">
+      <label>档期月份 <input id="capacity-detail-month" type="month" value="${esc(d.capacity_month)}" onchange="changeCapacityDetailMonth(this.value)"></label>
+      <span class="muted">计算基准日 ${esc(d.as_of_date)}</span>
     </div>
-    <div class="muted" style="font-size:12px;margin-top:8px">可用率 = 100 − 该周各项目占用之和（PRD §5.2）；超 100% 标红。</div>`;
+    <div class="secbox">
+      <div class="kv"><b>有效档期</b>${detailVal(d.effective_availability)}${override?' · 人工修正':""}</div>
+      <div class="kv"><b>自动计算状态</b>${detailVal(d.computed_availability)}${d.availability_conflict?' <span class="conflict">⚠与人工修正冲突</span>':""}</div>
+      <div class="kv"><b>月度占用率</b>${d.computed_load_pct==null?"—":fmt(d.computed_load_pct)+"%"}</div>
+      <div class="kv"><b>本月分摊字数</b>${fmt(d.allocated_words)} / ${fmt(d.monthly_capacity)}</div>
+      <div class="kv"><b>翻译日产能</b>${fmt(d.daily_capacity)} 字</div>
+      <div class="kv"><b>月产能</b>${fmt(d.daily_capacity)} × ${d.monthly_work_days} = ${fmt(d.monthly_capacity)} 字</div>
+      <div class="muted" style="margin-top:8px">阈值：&lt;50% 空闲；50%–&lt;80% 健康；80%–100% 饱和；&gt;100% 警告。剩余字数从计算基准日起，按项目排期内的周一至周五均匀分摊到各月；现有剩余量不用于回算历史月份。</div>
+    </div>
+    ${tbl(["项目","角色","剩余排期","本月/总工作日","剩余字数","本月分摊字数","占用率"],rows)}
+    ${issues?`<div class="secbox" style="margin-top:10px"><b class="conflict">产能资料不完整</b><ul>${issues}</ul><div class="muted">请在“项目经历”补齐当前项目的开始日期、剩余字数和截止/结束日期。系统不会用手填百分比补算。</div></div>`:""}
+    <div class="addrow edit-only" style="margin-top:10px">
+      <div class="field"><label>按月人工修正</label><select id="capacity-override-status"><option value="">不修正</option><option ${override?.status==="空闲"?"selected":""}>空闲</option><option ${override?.status==="健康"?"selected":""}>健康</option><option ${override?.status==="饱和"?"selected":""}>饱和</option><option ${override?.status==="警告"?"selected":""}>警告</option></select></div>
+      <div class="field"><label>修正原因</label><input id="capacity-override-reason" value="${esc(override?.reason||"")}" placeholder="必填" style="width:240px"></div>
+      <button class="btn-primary" onclick="saveCapacityOverride()">保存修正</button>
+      ${override?'<button class="btn-ghost" onclick="clearCapacityOverride()">清除修正</button>':""}
+    </div>`;
 }
-async function addCapacity() {
-  const b = {period_year:num("cp-y"), period_month:num("cp-m"), week_no:num("cp-w"), project:val("cp-proj"), occupancy_pct:num("cp-occ")||0};
-  if (!validRange("cp-y", "年", 1900, 2100, true)) return;
-  if (!validRange("cp-m", "月", 1, 12, true)) return;
-  if (!validRange("cp-w", "周", 1, 6, true)) return;
-  if (!validRange("cp-occ", "占用", 0, 100, true)) return;
-  try { await api("POST",`/api/translators/${CUR.id}/capacity`, b); subCapacity(); } catch(e){}
+async function saveCapacityOverride() {
+  const selectedMonth=val("capacity-detail-month"),status=val("capacity-override-status"),reason=val("capacity-override-reason");
+  if(!status)return failField("请选择人工修正状态");
+  if(!reason)return failField("人工修正必须填写原因");
+  try{await api("PUT",`/api/translators/${CUR.id}/capacity/override?month=${encodeURIComponent(selectedMonth)}`,{status,reason});await refreshCapacityView(selectedMonth);}catch(e){}
+}
+async function changeCapacityDetailMonth(selectedMonth) {
+  const translatorId=CUR.id;
+  CAPACITY_MONTH=selectedMonth;
+  document.getElementById("capacityMonth").value=selectedMonth;
+  await load();
+  CUR=DATA.find(item=>item.id===translatorId)||CUR;
+  await renderDetailSummary();
+  await subCapacity(selectedMonth);
+}
+async function clearCapacityOverride() {
+  const selectedMonth=val("capacity-detail-month");
+  try{await api("DELETE",`/api/translators/${CUR.id}/capacity/override?month=${encodeURIComponent(selectedMonth)}`);await refreshCapacityView(selectedMonth);}catch(e){}
+}
+async function refreshCapacityView(selectedMonth) {
+  const translatorId=CUR.id;
+  if(selectedMonth===CAPACITY_MONTH){await load();CUR=DATA.find(item=>item.id===translatorId)||CUR;await renderDetailSummary();}
+  await subCapacity(selectedMonth);
 }
 function today(){ return new Date().toISOString().slice(0,10); }
 function month(){ return new Date().toISOString().slice(0,7); }
@@ -2240,6 +2304,8 @@ if (typeof window !== "undefined" && window.addEventListener) {
   });
 }
 document.getElementById("search").addEventListener("input", render);
+CAPACITY_MONTH=month();
+document.getElementById("capacityMonth").value=CAPACITY_MONTH;
 initExcelHeaders();
 switchRole();   // 默认以资源端登录并加载
 </script>

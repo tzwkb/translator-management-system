@@ -3,7 +3,7 @@ import re
 from datetime import date
 from typing import Any, Literal, Optional
 
-from pydantic import BaseModel, field_validator, model_validator
+from pydantic import BaseModel, ConfigDict, field_validator, model_validator
 
 DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 MONTH_RE = re.compile(r"^\d{4}-\d{2}$")
@@ -68,6 +68,8 @@ def _percent(v: Any):
 
 
 class TranslatorIn(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     # 仅人录入字段；派生字段（QA分/客诉数/谈判/累计等）由联动维护，不在此
     name: str
     native_language: str                  # PRD 必填
@@ -96,8 +98,6 @@ class TranslatorIn(BaseModel):
     current_project: Optional[str] = None
     role: Optional[TaskType] = None
     daily_output: Optional[int] = None
-    weekend_off: Optional[bool] = None
-    availability: Optional[Literal["空闲", "健康", "饱和", "警告"]] = None
     currency: Optional[Currency] = None
     payment_method: Optional[str] = None
     settlement_mode: Literal["monthly", "cumulative"] = "monthly"
@@ -201,9 +201,19 @@ class ProjectExperienceIn(BaseModel):
         return _non_negative(v)
 
     @model_validator(mode="after")
-    def valid_language_pair(self):
+    def valid_project(self):
         if bool(self.source_lang) != bool(self.target_lang):
             raise ValueError("语言对需同时选择源语言和目标语言")
+        schedule_end = self.deadline or self.end_date
+        if self.start_date and schedule_end and schedule_end < self.start_date:
+            raise ValueError("项目截止日期不能早于开始日期")
+        if self.project_status == "current":
+            if self.remaining_volume is None:
+                raise ValueError("当前项目必须填写剩余字数")
+            if not self.start_date:
+                raise ValueError("当前项目必须填写开始日期")
+            if not schedule_end:
+                raise ValueError("当前项目必须填写截止日期或结束日期")
         return self
 
 
@@ -300,7 +310,7 @@ class ProjectPriceIn(BaseModel):
     project_name: str
     source_lang: Optional[str] = None
     target_lang: Optional[str] = None
-    price_type: Literal["fixed", "custom"]
+    price_type: Literal["translation", "review", "fixed", "custom"]
     task_type: Optional[TaskType] = None
     custom_task_name: Optional[str] = None
     amount: float
@@ -330,12 +340,21 @@ class ProjectPriceIn(BaseModel):
     def valid_price_type(self):
         if bool(self.source_lang) != bool(self.target_lang):
             raise ValueError("语言对需同时选择源语言和目标语言")
-        if self.price_type == "fixed":
+        if self.price_type == "translation":
+            self.task_type = "翻译"
+            self.custom_task_name = None
+        elif self.price_type == "review":
+            self.task_type = "审校"
+            self.custom_task_name = None
+        elif self.price_type == "fixed":
             self.task_type = "一口价"
+            self.custom_task_name = None
             if self.unit not in {"project", "task"}:
                 raise ValueError("一口价单位只能是项目或任务")
-        elif not self.custom_task_name:
-            raise ValueError("其他价格必须填写自定义任务名称")
+        else:
+            self.task_type = "其他"
+            if not self.custom_task_name:
+                raise ValueError("其他价格必须填写自定义任务名称")
         return self
 
 
@@ -409,38 +428,19 @@ class ComplaintIn(BaseModel):
         return _non_negative(v)
 
 
-class CapacityIn(BaseModel):
-    period_year: int
-    period_month: int
-    week_no: int
-    project: Optional[str] = None
-    occupancy_pct: int = 0
+class CapacityOverrideIn(BaseModel):
+    model_config = ConfigDict(extra="forbid")
 
-    @field_validator("period_year")
-    @classmethod
-    def valid_period_year(cls, v):
-        if not (1900 <= v <= 2100):
-            raise ValueError("年份应在 1900-2100")
-        return v
+    status: Literal["空闲", "健康", "饱和", "警告"]
+    reason: str
 
-    @field_validator("period_month")
+    @field_validator("reason", mode="before")
     @classmethod
-    def valid_period_month(cls, v):
-        if not (1 <= v <= 12):
-            raise ValueError("月份应在 1-12")
-        return v
-
-    @field_validator("week_no")
-    @classmethod
-    def valid_week_no(cls, v):
-        if not (1 <= v <= 6):
-            raise ValueError("周次应在 1-6")
-        return v
-
-    @field_validator("occupancy_pct")
-    @classmethod
-    def valid_occupancy(cls, v):
-        return _percent(v)
+    def valid_reason(cls, v):
+        value = _blank(v)
+        if value is None:
+            raise ValueError("人工修正必须填写原因")
+        return value
 
 
 class PaymentIn(BaseModel):
