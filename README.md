@@ -23,6 +23,7 @@ Translator lifecycle, capability, rate, settlement, and risk management system f
 - Fixed-price and custom project prices, plus rate-change, quality, contract, complaint, and capacity records; quality ratings use cumulative LQE scores with an auditable manual override.
 - Monthly capacity uses translation output × 20 workdays, defaults to 2,000 units/day, and reports idle/healthy/saturated/warning thresholds.
 - Metadata-driven AND filters cover the translator record and all related business records, including typed currency-aware price ranges.
+- Translator and PO grids provide Excel-style column menus with value search, multi-select, blank values, cross-column AND filtering, sorting, active-filter chips, and one-click clearing.
 - PO settlement supports latest project-price matching, per-1k, hourly, fixed, and manual pricing, full manual correction, unpaid detail, and monthly/cumulative summaries.
 - Projectlist supports read-only mapping preview plus checked/unchecked `结算PO` filtering; checked rows are marked as historical. Financial writes remain hard-disabled until the PO quantity rule is confirmed.
 - Translator names use stable IDs with persistent aliases. Excel rows carrying an existing translator ID overwrite that record and preserve the previous name as an alias.
@@ -94,7 +95,7 @@ python3 translator-mgmt-agent/test_client_payloads.py
 git diff --check
 ```
 
-Current acceptance baseline: `142/142`; LQE-rating boundaries `13/13`; monthly-capacity thresholds `6/6`; eleven frontend static test scripts.
+Current acceptance baseline: `142/142`; LQE-rating boundaries `13/13`; monthly-capacity thresholds `6/6`; twelve frontend static test scripts.
 
 ## Remaining Work
 

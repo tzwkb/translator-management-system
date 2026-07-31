@@ -4,7 +4,9 @@ import fs from "node:fs";
 const html = fs.readFileSync(new URL("../index.html", import.meta.url), "utf8");
 
 assert.doesNotMatch(html, /字数\(千\)/);
-assert.match(html, /<th>计价<\/th><th>数量<\/th><th>单价<\/th>/);
+assert.match(html, /data-excel-field="pricing_mode">计价<\/th>/);
+assert.match(html, /data-excel-field="word_count">数量<\/th>/);
+assert.match(html, /data-excel-field="rate">单价<\/th>/);
 assert.match(html, /id="p-quantity-label">字数（字）/);
 assert.match(html, /id="p-rate-label">单价（\/千字）/);
 assert.match(html, /per_1000:"金额 = 字数 ÷ 1000 × 单价/);
