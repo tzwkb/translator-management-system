@@ -6,7 +6,9 @@ const html = fs.readFileSync(new URL("../index.html", import.meta.url), "utf8");
 assert.match(html, /const TRF = \[[\s\S]*"gender","entity_type"/);
 assert.match(html, /id="f-gender"[\s\S]*value="male">男/);
 assert.match(html, /id="f-entity_type"[\s\S]*value="individual">个人译员/);
-assert.match(html, /<th>姓名<\/th><th>主体<\/th><th>性别<\/th>/);
+assert.match(html, /data-excel-field="name">姓名<\/th>/);
+assert.match(html, /data-excel-field="entity_type">主体<\/th>/);
+assert.match(html, /data-excel-field="gender">性别<\/th>/);
 assert.match(html, /function genderZh/);
 assert.match(html, /function entityTypeZh/);
 
