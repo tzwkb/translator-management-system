@@ -308,13 +308,14 @@
       <span class="excel-hint">表头筛选 · 更多字段可筛选未展示信息</span>
       <span class="count" id="poCount"></span>
       <span class="count" id="poImportResult"></span>
+      <button class="btn-ghost edit-only" onclick="exportPOLog()">导出 PO Log</button>
       <label class="btn-ghost edit-only" style="display:inline-block">导入标准 PO Excel<input id="poImportFile" type="file" accept=".xlsx" style="display:none" onchange="importPOFile(this)"></label>
       <select id="projectlistPOState" class="edit-only" title="Projectlist 结算PO状态">
         <option value="all">Projectlist：全部</option>
         <option value="unchecked">Projectlist：未勾选</option>
         <option value="checked">Projectlist：已勾选</option>
       </select>
-      <label class="btn-ghost edit-only" style="display:inline-block" title="仅核对译员映射和结算PO状态；数量规则未确认，不会写入">只读预览 Projectlist<input id="projectlistPreviewFile" type="file" accept=".xlsx" style="display:none" onchange="previewProjectlistFile(this)"></label>
+      <label class="btn-ghost edit-only" style="display:inline-block" title="按所选结算 PO 状态预览，确认后导入">导入 Projectlist<input id="projectlistImportFile" type="file" accept=".xlsx" style="display:none" onchange="importProjectlistFile(this)"></label>
       <button class="btn-primary edit-only" onclick="openPO()">+ 新增 PO</button>
     </div>
     <div id="poExcelBar" class="excel-filter-bar" hidden></div>
@@ -2208,56 +2209,84 @@ function renderPOGrid() {
   }).join("");
 }
 async function setPOStatus(id, status) { try { const res = await api("PUT",`/api/po/${id}/status`,{status}); if (res && res.pending) showToast(res.msg||"已提交待人工审核", "info"); loadPO(); } catch(e){ loadPO(); } }
+function exportPOLog() {
+  return downloadAuth("/api/export/po-log","PO_Log.xlsx");
+}
+function projectlistImportState() {
+  return document.getElementById("projectlistPOState")?.value||"all";
+}
+function poImportPath(preview,state) {
+  const encodedState=encodeURIComponent(state);
+  return preview
+    ? `/api/import/po?preview=true&projectlist_po_state=${encodedState}`
+    : `/api/import/po?projectlist_po_state=${encodedState}`;
+}
+function poImportErrors(data) {
+  const rows=data.invalid_rows||[];
+  const shown=rows.slice(0,20).map(row=>`${row.sheet?`${row.sheet} `:""}第 ${row.row??row.source_row??"?"} 行：${row.error}`).join("\n");
+  return rows.length>20?`${shown}\n……另有 ${rows.length-20} 条错误未在此处展开`:shown;
+}
 function renderProjectlistPreview(preview) {
   const invalid=(preview.invalid_rows||[]).length;
-  const summary=`Projectlist 只读预览：源表已勾选 ${preview.checked_rows||0} 行、未勾选 ${preview.unchecked_rows||0} 行；当前选中 ${preview.selected_rows||0} 行，匹配 ${preview.matched_rows||0} 行，其中历史跳过 ${preview.skipped_settled||0} 行、等待数量规则 ${preview.mapping_ready||0} 行，错误 ${invalid} 行${preview.ignored_rows?`，空白业务行 ${preview.ignored_rows} 行`:""}。`;
+  const stateLabel={all:"全部",unchecked:"未勾选",checked:"已勾选"}[preview.projectlist_po_state]||preview.projectlist_po_state||"全部";
+  const conflicts=preview.source_conflicts||0;
+  const summary=`Projectlist 预览（筛选：${stateLabel}）：可导入 ${preview.ready||0} 行，跳过已结算 ${preview.skipped_settled||0} 行，跳过重复 ${preview.skipped_dup_po||0} 行，错误 ${invalid} 行${conflicts?`（其中来源冲突 ${conflicts} 行）`:""}；当前选中 ${preview.selected_rows||0} 行（源表已勾选 ${preview.checked_rows||0} 行、未勾选 ${preview.unchecked_rows||0} 行）${preview.paid_rows?`，其中已打款 ${preview.paid_rows} 行`:""}${preview.ignored_rows?`，非 PO 业务行 ${preview.ignored_rows} 行`:""}。`;
+  const actionLabel={import:"导入",skip_settled:"跳过已结算",skip_duplicate:"跳过重复",source_conflict:"来源冲突，需人工核对"};
   const samples=(preview.preview_rows||[]).slice(0,8).map(row=>
-    `第 ${row.source_row} 行｜${row.translator_name}｜${row.project||"—"}｜${row.settlement_po_checked?"已勾选，历史跳过":"未勾选，数量规则待确认"}`
+    `第 ${row.source_row??row.row??"?"} 行｜${row.translator_name||row.translator_id||"—"}｜${row.project||"—"}｜${row.expected_amount??row.amount??"—"} ${row.currency||""}｜${actionLabel[row.action]||row.action||"待处理"}`
   ).join("\n");
-  const errors=(preview.invalid_rows||[]).slice(0,20).map(row=>`第 ${row.row} 行：${row.error}`).join("\n");
+  const errors=poImportErrors(preview);
+  const detail=[summary,samples,errors].filter(Boolean).join("\n\n");
+  const result=document.getElementById("poImportResult");
+  result.textContent=`已预览：可导入 ${preview.ready||0} 行，跳过 ${(preview.skipped_settled||0)+(preview.skipped_dup_po||0)} 行，错误 ${invalid} 行`;
+  result.title=detail;
+  showToast(result.textContent,"info");
+  return detail;
+}
+function renderStandardPOPreview(preview) {
+  const samples=(preview.preview_rows||[]).slice(0,5).map(row=>`${row.translator_name||row.translator_id}｜${row.project||"—"}｜${row.expected_amount} ${row.currency}`).join("\n");
+  const summary=`标准 PO 预览：可导入 ${preview.ready||0} 行，跳过重复 ${preview.skipped_dup_po||0} 行，错误 ${(preview.invalid_rows||[]).length} 行\n工作表：${preview.sheet||"—"}，表头第 ${preview.header_row||"?"} 行`;
+  const detail=[summary,samples,poImportErrors(preview)].filter(Boolean).join("\n\n");
+  const result=document.getElementById("poImportResult");
+  result.textContent=`已预览：可导入 ${preview.ready||0} 行，跳过 ${preview.skipped_dup_po||0} 行，错误 ${(preview.invalid_rows||[]).length} 行`;
+  result.title=detail;
+  return detail;
+}
+function renderPOImportResult(data) {
+  const invalid=(data.invalid_rows||[]).length;
+  const settled=data.source_format==="projectlist"?data.skipped_settled||0:0;
+  const duplicate=data.skipped_dup_po||0;
+  const conflicts=data.source_conflicts||0;
+  const summary=data.source_format==="projectlist"
+    ? `导入 ${data.imported||0} 行，跳过已结算 ${settled} 行，跳过重复 ${duplicate} 行，来源冲突 ${conflicts} 行，其他错误 ${Math.max(0,invalid-conflicts)} 行`
+    : `导入 ${data.imported||0} 行，跳过重复 ${duplicate} 行，错误 ${invalid} 行`;
   const result=document.getElementById("poImportResult");
   result.textContent=summary;
-  result.title=[summary,samples,errors].filter(Boolean).join("\n\n");
-  showToast(summary,"info");
+  result.title=poImportErrors(data);
+  showToast(summary,invalid?"info":"success");
+  if(invalid)console.warn("PO import invalid_rows",data.invalid_rows);
 }
-async function previewProjectlistFile(input) {
-  const file=input.files&&input.files[0];
-  if(!file)return;
-  try {
-    const state=document.getElementById("projectlistPOState").value;
-    const form=new FormData();form.append("file",file);
-    const preview=await apiForm("POST",`/api/import/po?preview=true&projectlist_po_state=${encodeURIComponent(state)}`,form);
-    if(preview.source_format!=="projectlist")return failField("所选文件不是 Projectlist 格式");
-    renderProjectlistPreview(preview);
-  } finally {
-    input.value="";
-  }
+async function importProjectlistFile(input) {
+  return importPOFile(input,true);
 }
-async function importPOFile(input) {
+async function importPOFile(input,projectlistOnly=false) {
   const file = input.files && input.files[0];
   if (!file) return;
+  if(PO_IMPORT_FILE){input.value="";return failField("已有 PO 导入正在处理，请稍候");}
   PO_IMPORT_FILE=file;
+  const state=projectlistImportState();
   try {
     const previewForm=new FormData();previewForm.append("file",file);
-    const preview=await apiForm("POST","/api/import/po?preview=true",previewForm);
-    if(preview.source_format==="projectlist"){
-      renderProjectlistPreview(preview);
-      return;
-    }
-    const samples=(preview.preview_rows||[]).slice(0,5).map(row=>`${row.translator_name||row.translator_id}｜${row.project||"—"}｜${row.expected_amount} ${row.currency}`).join("\n");
-    const previewSummary=`预览：可导入 ${preview.ready||0} 行，重复 ${preview.skipped_dup_po||0} 行，错误 ${(preview.invalid_rows||[]).length} 行\n工作表：${preview.sheet||"—"}，表头第 ${preview.header_row||"?"} 行\n\n${samples}`;
-    const result = document.getElementById("poImportResult");
-    result.textContent=`已预览 ${preview.ready||0} 行，等待确认`;
-    result.title=previewSummary+"\n"+(preview.invalid_rows||[]).map(x=>`第 ${x.row} 行：${x.error}`).join("\n");
-    if(!confirm(previewSummary+"\n\n确认写入以上有效行？"))return;
+    const preview=await apiForm("POST",poImportPath(true,state),previewForm);
+    if(projectlistOnly&&preview.source_format!=="projectlist")return failField("所选文件不是 Projectlist 格式");
+    const previewDetail=preview.source_format==="projectlist"
+      ? renderProjectlistPreview(preview)
+      : renderStandardPOPreview(preview);
+    if(!(preview.ready||0)){showToast("预览完成，没有可写入的有效行","info");return;}
+    if(!confirm(`${previewDetail}\n\n确认写入以上有效行？`))return;
     const importForm=new FormData();importForm.append("file",file);
-    const data=await apiForm("POST","/api/import/po",importForm);
-    const invalid=(data.invalid_rows||[]).length, skipped=data.skipped_dup_po||0;
-    const summary=`导入 ${data.imported||0} 行，跳过重复 ${skipped} 行，错误 ${invalid} 行`;
-    result.textContent=summary;
-    result.title=(data.invalid_rows||[]).map(x=>`${x.sheet||""} 第 ${x.row} 行：${x.error}`).join("\n");
-    showToast(summary,invalid?"info":"success");
-    if(invalid)console.warn("PO import invalid_rows",data.invalid_rows);
+    const data=await apiForm("POST",poImportPath(false,state),importForm);
+    renderPOImportResult(data);
     loadPO();
   } finally {
     PO_IMPORT_FILE=null;

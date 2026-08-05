@@ -1483,6 +1483,18 @@ def main():
         remaining_aliases,
     )
 
+    projectlist_prefix = "Projectlist导入" + run_tag
+    projectlist_projects = {
+        "translation": projectlist_prefix + "-翻译",
+        "review": projectlist_prefix + "-审校",
+        "mtpe": projectlist_prefix + "-MTPE",
+        "lqa": projectlist_prefix + "-LQA",
+        "lqe": projectlist_prefix + "-LQE",
+        "fixed": projectlist_prefix + "-一口价",
+        "checked": projectlist_prefix + "-已勾选",
+        "unsupported": projectlist_prefix + "-未知工作类型",
+        "missing_wwc": projectlist_prefix + "-缺WWC",
+    }
     projectlist_raw, projectlist_ct = mp(mk_xlsx_sheets({
         "【项目组】Projectlist (V1.0)": [
             ["说明"],
@@ -1490,60 +1502,118 @@ def main():
             [
                 "项目名称（稿件/LQA批次）", "DDL", "目标语言", "指定译员",
                 "工作类型", "翻译费率", "币种", "REPNEW 实际",
-                "译员PO时间（X月）", "原语言", "结算PO",
+                "译员WWC字数", "REPNEW & 小时数", "稿费金额（CNY）",
+                "译员PO时间（X月）", "原语言", "结算PO", "已打款",
             ],
             [
-                "真实翻译批次", "2026-07-31", "英语",
-                projectlist_alias, "翻译", 0.2, "CNY", 1000,
-                "7 月", "简体中文", "□",
+                projectlist_projects["translation"], "2026-07-31", "英语",
+                projectlist_alias, "翻译", 0.2, "CNY", 9900,
+                1200, 77, 240, "7 月", "简体中文", "□", "否",
             ],
             [
-                "真实LQA批次", "2026-07-31", "英语",
-                filter_translator["name"], "LQA", 15, "USD", 3,
-                "7 月", "简体中文", "✅",
+                projectlist_projects["review"], "2026-07-31", "英语",
+                filter_translator["name"], "审校", 0.1, "CNY", 8800,
+                2000, 66, 200, "7 月", "简体中文", "□", "否",
             ],
             [
-                "藏语单语LQA", "2026-07-31", "藏语",
-                filter_translator["name"], "LQA", 15, "USD", 1,
-                "7 月", "藏语", "□",
+                projectlist_projects["mtpe"], "2026-07-31", "英语",
+                filter_translator["name"], "MTPE", 0.08, "CNY", 7700,
+                1500, 55, 120, "7 月", "简体中文", "□", "否",
             ],
             [
-                "台繁LQA", "2026-07-31", "台繁",
-                filter_translator["name"], "LQA", 15, "USD", 2,
-                "7 月", "简体中文", "□",
+                projectlist_projects["lqa"], "2026-07-31", "藏语",
+                filter_translator["name"], "LQA", 15, "USD", 6600,
+                3, 66, None, "7 月", "藏语", "□", "否",
             ],
             [
-                "欧洲语言评估（法语）", "2026-07-31", "欧洲语言",
-                filter_translator["name"], "审校", 0.1, "CNY", 1000,
-                "7 月", "英语", "□",
+                projectlist_projects["lqe"], "2026-07-31", "英语",
+                filter_translator["name"], "LQE", 20, "USD", 5500,
+                2, 55, None, "7 月", "简体中文", "□", "否",
             ],
             [
-                "欧洲语言通用批次", "2026-07-31", "欧洲语言",
-                filter_translator["name"], "审校", 0.1, "CNY", 500,
-                "7 月", "英语", "□",
+                projectlist_projects["fixed"], "2026-07-31", "英语",
+                filter_translator["name"], "一口价", 999, "CNY", 4400,
+                2200, 11, 680, "7 月", "简体中文", "□", "否",
+            ],
+            [
+                projectlist_projects["checked"], "2026-07-31", "英语",
+                filter_translator["name"], "翻译", 0.3, "CNY", 3300,
+                1000, 22, None, "7 月", "简体中文", "✅", "否",
+            ],
+            [
+                projectlist_projects["unsupported"], "2026-07-31", "英语",
+                filter_translator["name"], "配音", 50, "CNY", 2200,
+                1000, 4, None, "7 月", "简体中文", "□", "否",
+            ],
+            [
+                projectlist_projects["missing_wwc"], "2026-07-31", "英语",
+                filter_translator["name"], "审校", 0.1, "CNY", 2500,
+                None, 6, None, "7 月", "简体中文", "□", "否",
             ],
         ],
     }))
-    before_projectlist = len(req("GET", "/api/po?month=2026-07")[1])
+    projectlist_secure_headers = [
+        "项目名称（稿件/LQA批次）", "DDL", "目标语言", "指定译员",
+        "工作类型", "翻译费率", "币种", "译员WWC字数",
+        "稿费金额（CNY）", "译员PO时间（X月）", "原语言",
+        "结算PO", "已打款",
+    ]
+    missing_projectlist_header_codes = {}
+    for missing_header in ("结算PO", "已打款"):
+        missing_header_raw, missing_header_ct = mp(mk_xlsx_sheets({
+            "Projectlist 缺表头": [[
+                header
+                for header in projectlist_secure_headers
+                if header != missing_header
+            ]],
+        }))
+        missing_projectlist_header_codes[missing_header] = code(lambda: req(
+            "POST", "/api/import/po",
+            raw=missing_header_raw, token=ET, ct=missing_header_ct,
+        ))
+    chk(
+        "Projectlist正式导入缺结算PO或已打款表头均拒绝",
+        missing_projectlist_header_codes == {"结算PO": 400, "已打款": 400},
+        missing_projectlist_header_codes,
+    )
     _, projectlist_all = req(
         "POST", "/api/import/po?preview=true&projectlist_po_state=all",
         raw=projectlist_raw, token=ET, ct=projectlist_ct,
     )
     chk(
-        "Projectlist只读预览识别名称映射及已勾选历史记录",
+        "Projectlist预览统一取WWC并按工作类型计价",
         projectlist_all.get("source_format") == "projectlist"
-        and projectlist_all.get("write_enabled") is False
-        and projectlist_all.get("quantity_rule_confirmed") is False
-        and projectlist_all.get("ready") == 0
-        and projectlist_all.get("mapping_ready") == 5
+        and projectlist_all.get("write_enabled") is True
+        and projectlist_all.get("quantity_rule_confirmed") is True
+        and projectlist_all.get("ready") == 6
         and projectlist_all.get("checked_rows") == 1
-        and projectlist_all.get("unchecked_rows") == 5
+        and projectlist_all.get("unchecked_rows") == 8
+        and projectlist_all.get("paid_rows") == 0
+        and projectlist_all.get("settled_rows") == 1
         and projectlist_all.get("skipped_settled") == 1
-        and not projectlist_all.get("invalid_rows")
+        and len(projectlist_all.get("invalid_rows", [])) == 2
         and any(
             row.get("translator_id") == filter_tid
             and row.get("translator_name") == projectlist_alias
-            and row.get("action") == "blocked_quantity_rule"
+            and row.get("project") == projectlist_projects["translation"]
+            and row.get("word_count") == 1200
+            and row.get("rate") == 200
+            and abs(float(row.get("expected_amount", 0)) - 240) <= 0.02
+            and row.get("action") == "import"
+            for row in projectlist_all.get("preview_rows", [])
+        )
+        and any(
+            row.get("project") == projectlist_projects["lqa"]
+            and row.get("pricing_mode") == "per_hour"
+            and row.get("quantity_source") == "译员WWC字数"
+            and row.get("word_count") == 3
+            and abs(float(row.get("expected_amount", 0)) - 45) <= 0.02
+            for row in projectlist_all.get("preview_rows", [])
+        )
+        and any(
+            row.get("project") == projectlist_projects["fixed"]
+            and row.get("pricing_mode") == "fixed"
+            and abs(float(row.get("expected_amount", 0)) - 680) <= 0.02
             for row in projectlist_all.get("preview_rows", [])
         ),
         projectlist_all,
@@ -1561,10 +1631,11 @@ def main():
         projectlist_checked.get("selected_rows") == 1
         and projectlist_checked.get("skipped_settled") == 1
         and projectlist_checked["preview_rows"][0]["action"] == "skip_settled"
-        and projectlist_unchecked.get("selected_rows") == 5
-        and projectlist_unchecked.get("mapping_ready") == 5
+        and projectlist_unchecked.get("selected_rows") == 8
+        and projectlist_unchecked.get("ready") == 6
+        and len(projectlist_unchecked.get("invalid_rows", [])) == 2
         and all(
-            row["action"] == "blocked_quantity_rule"
+            row["action"] == "import"
             for row in projectlist_unchecked.get("preview_rows", [])
         ),
         {
@@ -1572,14 +1643,645 @@ def main():
             "unchecked": projectlist_unchecked,
         },
     )
+    _, projectlist_import = req(
+        "POST", "/api/import/po?projectlist_po_state=all",
+        raw=projectlist_raw, token=ET, ct=projectlist_ct,
+    )
+    _, imported_projectlist_rows = req(
+        "GET", "/api/po?" + urlencode({
+            "month": "2026-07",
+            "project": projectlist_prefix,
+        }),
+    )
+    imported_projectlist = {
+        row["project"]: row for row in imported_projectlist_rows
+    }
+    expected_projectlist = {
+        projectlist_projects["translation"]: {
+            "pricing_mode": "per_1000", "word_count": 1200,
+            "rate": 200, "amount": 240,
+        },
+        projectlist_projects["review"]: {
+            "pricing_mode": "per_1000", "word_count": 2000,
+            "rate": 100, "amount": 200,
+        },
+        projectlist_projects["mtpe"]: {
+            "pricing_mode": "per_1000", "word_count": 1500,
+            "rate": 80, "amount": 120,
+        },
+        projectlist_projects["lqa"]: {
+            "pricing_mode": "per_hour", "word_count": 3,
+            "rate": 15, "amount": 45,
+        },
+        projectlist_projects["lqe"]: {
+            "pricing_mode": "per_hour", "word_count": 2,
+            "rate": 20, "amount": 40,
+        },
+        projectlist_projects["fixed"]: {
+            "pricing_mode": "fixed", "amount": 680,
+        },
+    }
     chk(
-        "Projectlist数量算法未确认时写入保持禁用",
-        code(lambda: req(
-            "POST", "/api/import/po",
-            raw=projectlist_raw, token=ET, ct=projectlist_ct,
-        )) == 409
-        and len(req("GET", "/api/po?month=2026-07")[1])
-        == before_projectlist,
+        "Projectlist正式导入按WWC及计价模式写入PO",
+        projectlist_import.get("source_format") == "projectlist"
+        and projectlist_import.get("preview") is False
+        and projectlist_import.get("imported") == 6
+        and projectlist_import.get("ready") == 6
+        and projectlist_import.get("skipped_settled") == 1
+        and projectlist_import.get("skipped_dup_po") == 0
+        and len(projectlist_import.get("invalid_rows", [])) == 2
+        and set(imported_projectlist) == set(expected_projectlist)
+        and all(
+            all(
+                row.get(field) == value
+                for field, value in expected_projectlist[project].items()
+                if field != "amount"
+            )
+            and abs(
+                float(row.get("amount", 0))
+                - expected_projectlist[project]["amount"]
+            ) <= 0.02
+            and row.get("amount_ok") is True
+            and row.get("source_key")
+            for project, row in imported_projectlist.items()
+        ),
+        {"result": projectlist_import, "rows": imported_projectlist_rows},
+    )
+    _, repeated_projectlist_import = req(
+        "POST", "/api/import/po?projectlist_po_state=all",
+        raw=projectlist_raw, token=ET, ct=projectlist_ct,
+    )
+    repeated_projectlist_rows = req(
+        "GET", "/api/po?" + urlencode({
+            "month": "2026-07",
+            "project": projectlist_prefix,
+        }),
+    )[1]
+    chk(
+        "Projectlist同一来源重复导入跳过且不重复写入",
+        repeated_projectlist_import.get("imported") == 0
+        and repeated_projectlist_import.get("ready") == 0
+        and repeated_projectlist_import.get("skipped_settled") == 1
+        and repeated_projectlist_import.get("skipped_dup_po") == 6
+        and len(repeated_projectlist_import.get("invalid_rows", [])) == 2
+        and len(repeated_projectlist_rows) == 6,
+        repeated_projectlist_import,
+    )
+    projectlist_identity_project = "Projectlist稳定身份" + run_tag
+    projectlist_identity_raw, projectlist_identity_ct = mp(mk_xlsx_sheets({
+        "Projectlist 稳定身份": [
+            projectlist_secure_headers,
+            [
+                projectlist_identity_project, "2026-08-31", "英语",
+                filter_translator["name"], "翻译", 0.2, "CNY",
+                1000, 200, "8月", "简体中文", "□", "否",
+            ],
+            [
+                projectlist_identity_project, "2026-08-31", "英语",
+                projectlist_alias, "翻译", 0.2, "CNY",
+                1000, 200, "8月", "简体中文", "□", "否",
+            ],
+        ],
+    }))
+    _, projectlist_identity_import = req(
+        "POST", "/api/import/po?projectlist_po_state=all",
+        raw=projectlist_identity_raw, token=ET, ct=projectlist_identity_ct,
+    )
+    projectlist_identity_rows = req(
+        "GET", "/api/po?" + urlencode({
+            "month": "2026-08",
+            "project": projectlist_identity_project,
+        }),
+    )[1]
+    identity_source_keys = {
+        row.get("source_key") for row in projectlist_identity_rows
+    }
+    chk(
+        "Projectlist正式名与别名同身份多行使用稳定occurrence",
+        projectlist_identity_import.get("imported") == 2
+        and projectlist_identity_import.get("ready") == 2
+        and projectlist_identity_import.get("skipped_dup_po") == 0
+        and projectlist_identity_import.get("source_conflicts") == 0
+        and not projectlist_identity_import.get("invalid_rows")
+        and len(projectlist_identity_rows) == 2
+        and len(identity_source_keys) == 2
+        and None not in identity_source_keys
+        and all(
+            row.get("translator_id") == filter_tid
+            for row in projectlist_identity_rows
+        ),
+        {
+            "result": projectlist_identity_import,
+            "rows": projectlist_identity_rows,
+        },
+    )
+    _, repeated_projectlist_identity = req(
+        "POST", "/api/import/po?projectlist_po_state=all",
+        raw=projectlist_identity_raw, token=ET, ct=projectlist_identity_ct,
+    )
+    repeated_projectlist_identity_rows = req(
+        "GET", "/api/po?" + urlencode({
+            "month": "2026-08",
+            "project": projectlist_identity_project,
+        }),
+    )[1]
+    chk(
+        "Projectlist同身份多行重传逐行跳过",
+        repeated_projectlist_identity.get("imported") == 0
+        and repeated_projectlist_identity.get("ready") == 0
+        and repeated_projectlist_identity.get("skipped_dup_po") == 2
+        and repeated_projectlist_identity.get("source_conflicts") == 0
+        and not repeated_projectlist_identity.get("invalid_rows")
+        and len(repeated_projectlist_identity_rows) == 2
+        and {
+            row.get("source_key")
+            for row in repeated_projectlist_identity_rows
+        } == identity_source_keys,
+        repeated_projectlist_identity,
+    )
+    identity_rows_before_revision = sorted(
+        (
+            row.get("id"), row.get("source_key"), row.get("word_count"),
+            row.get("rate"), row.get("currency"), row.get("amount"),
+        )
+        for row in repeated_projectlist_identity_rows
+    )
+    projectlist_revision_raw, projectlist_revision_ct = mp(mk_xlsx_sheets({
+        "Projectlist 内容修订": [
+            projectlist_secure_headers,
+            [
+                projectlist_identity_project, "2026-08-31", "英语",
+                filter_translator["name"], "翻译", 0.25, "USD",
+                1200, None, "8月", "简体中文", "□", "否",
+            ],
+        ],
+    }))
+    _, projectlist_revision_import = req(
+        "POST", "/api/import/po?projectlist_po_state=all",
+        raw=projectlist_revision_raw, token=ET, ct=projectlist_revision_ct,
+    )
+    projectlist_identity_after_revision = req(
+        "GET", "/api/po?" + urlencode({
+            "month": "2026-08",
+            "project": projectlist_identity_project,
+        }),
+    )[1]
+    identity_rows_after_revision = sorted(
+        (
+            row.get("id"), row.get("source_key"), row.get("word_count"),
+            row.get("rate"), row.get("currency"), row.get("amount"),
+        )
+        for row in projectlist_identity_after_revision
+    )
+    revision_conflicts = [
+        row
+        for row in projectlist_revision_import.get("invalid_rows", [])
+        if row.get("source_conflict") is True
+    ]
+    chk(
+        "Projectlist已导入身份内容修订拒绝新增",
+        projectlist_revision_import.get("imported") == 0
+        and projectlist_revision_import.get("ready") == 0
+        and projectlist_revision_import.get("skipped_dup_po") == 0
+        and projectlist_revision_import.get("source_conflicts") == 1
+        and len(revision_conflicts) == 1
+        and all(
+            label in revision_conflicts[0].get("error", "")
+            for label in ("数量/小时", "费率", "币种")
+        )
+        and identity_rows_after_revision == identity_rows_before_revision,
+        {
+            "result": projectlist_revision_import,
+            "rows": projectlist_identity_after_revision,
+        },
+    )
+    projectlist_edge_prefix = "Projectlist边界" + run_tag
+    projectlist_edge_projects = {
+        "rollover": projectlist_edge_prefix + "-跨年",
+        "unknown_po": projectlist_edge_prefix + "-未知结算PO",
+        "unknown_paid": projectlist_edge_prefix + "-未知已打款",
+        "paid_missing_translator": projectlist_edge_prefix + "-已打款无译员",
+        "fuzzy_name": projectlist_edge_prefix + "-禁止包含匹配",
+        "ambiguous_month": projectlist_edge_prefix + "-超两月月份",
+    }
+    projectlist_edge_raw, projectlist_edge_ct = mp(mk_xlsx_sheets({
+        "Projectlist 边界": [
+            ["说明"],
+            [
+                "项目名称（稿件/LQA批次）", "DDL", "目标语言", "指定译员",
+                "工作类型", "翻译费率", "币种", "REPNEW 实际",
+                "译员WWC字数", "REPNEW & 小时数", "稿费金额（CNY）",
+                "译员PO时间（X月）", "原语言", "结算PO", "已打款",
+            ],
+            [
+                projectlist_edge_projects["rollover"], "2026-12-31", "英语",
+                filter_translator["name"], "翻译", 0.2, "CNY", 9900,
+                1000, 77, 200, "1月", "简体中文", "□", "否",
+            ],
+            [
+                projectlist_edge_projects["unknown_po"], "2026-12-31", "英语",
+                filter_translator["name"], "翻译", 0.2, "CNY", 8800,
+                1000, 66, 200, "1月", "简体中文", "待处理", "否",
+            ],
+            [
+                projectlist_edge_projects["unknown_paid"], "2026-12-31", "英语",
+                filter_translator["name"], "翻译", 0.2, "CNY", 7700,
+                1000, 55, 200, "1月", "简体中文", "□", "待确认",
+            ],
+            [
+                projectlist_edge_projects["paid_missing_translator"],
+                "2026-12-31", "英语", "不存在译员" + run_tag,
+                "翻译", 0.2, "CNY", 6600, 1000, 44, 200,
+                "1月", "简体中文", "□", "是",
+            ],
+            [
+                projectlist_edge_projects["fuzzy_name"], "2026-12-31", "英语",
+                filter_translator["name"][1:], "翻译", 0.2, "CNY", 5500,
+                1000, 33, 200, "1月", "简体中文", "□", "否",
+            ],
+            [
+                projectlist_edge_projects["ambiguous_month"],
+                "2026-03-31", "英语", filter_translator["name"],
+                "翻译", 0.2, "CNY", 4400, 1000, 22, 200,
+                "6月", "简体中文", "□", "否",
+            ],
+        ],
+    }))
+    _, projectlist_edge_preview = req(
+        "POST", "/api/import/po?preview=true&projectlist_po_state=all",
+        raw=projectlist_edge_raw, token=ET, ct=projectlist_edge_ct,
+    )
+    edge_preview_by_project = {
+        row["project"]: row
+        for row in projectlist_edge_preview.get("preview_rows", [])
+    }
+    edge_preview_errors = {
+        row.get("row"): row.get("error")
+        for row in projectlist_edge_preview.get("invalid_rows", [])
+    }
+    chk(
+        "Projectlist跨年月份、状态和精确姓名边界预览",
+        projectlist_edge_preview.get("ready") == 1
+        and projectlist_edge_preview.get("checked_rows") == 0
+        and projectlist_edge_preview.get("unchecked_rows") == 4
+        and projectlist_edge_preview.get("paid_rows") == 1
+        and projectlist_edge_preview.get("settled_rows") == 1
+        and projectlist_edge_preview.get("unknown_state_rows") == 2
+        and projectlist_edge_preview.get("skipped_settled") == 1
+        and set(edge_preview_errors) == {4, 5, 7, 8}
+        and "状态无法识别" in edge_preview_errors[4]
+        and "状态无法识别" in edge_preview_errors[5]
+        and "译员不存在" in edge_preview_errors[7]
+        and "缺有效译员PO时间" in edge_preview_errors[8]
+        and edge_preview_by_project[
+            projectlist_edge_projects["rollover"]
+        ].get("settlement_month") == "2027-01"
+        and edge_preview_by_project[
+            projectlist_edge_projects["rollover"]
+        ].get("action") == "import"
+        and edge_preview_by_project[
+            projectlist_edge_projects["paid_missing_translator"]
+        ].get("action") == "skip_settled"
+        and edge_preview_by_project[
+            projectlist_edge_projects["paid_missing_translator"]
+        ].get("translator_id") is None
+        and edge_preview_by_project[
+            projectlist_edge_projects["paid_missing_translator"]
+        ].get("already_paid") is True,
+        projectlist_edge_preview,
+    )
+    _, projectlist_edge_import = req(
+        "POST", "/api/import/po?projectlist_po_state=all",
+        raw=projectlist_edge_raw, token=ET, ct=projectlist_edge_ct,
+    )
+    imported_projectlist_edge_rows = req(
+        "GET", "/api/po?" + urlencode({
+            "month": "2027-01",
+            "project": projectlist_edge_prefix,
+        }),
+    )[1]
+    chk(
+        "Projectlist边界行正式导入仅写入可确定PO",
+        projectlist_edge_import.get("imported") == 1
+        and projectlist_edge_import.get("ready") == 1
+        and projectlist_edge_import.get("skipped_settled") == 1
+        and projectlist_edge_import.get("skipped_dup_po") == 0
+        and len(projectlist_edge_import.get("invalid_rows", [])) == 4
+        and len(imported_projectlist_edge_rows) == 1
+        and imported_projectlist_edge_rows[0].get("project")
+        == projectlist_edge_projects["rollover"]
+        and imported_projectlist_edge_rows[0].get("settlement_month")
+        == "2027-01"
+        and abs(
+            float(imported_projectlist_edge_rows[0].get("amount", 0)) - 200
+        ) <= 0.02,
+        {
+            "result": projectlist_edge_import,
+            "rows": imported_projectlist_edge_rows,
+        },
+    )
+
+    def po_log_sheet_records(workbook, sheet_name):
+        rows = list(workbook[sheet_name].iter_rows(values_only=True))
+        headers = tuple(str(value or "").strip() for value in rows[0])
+        records = [
+            dict(zip(headers, row))
+            for row in rows[1:]
+            if any(value is not None for value in row)
+        ]
+        return headers, records
+
+    po_log_batch_fields = {
+        "id": ("id", "batch_id", "批次ID"),
+        "source_format": ("source_format", "来源格式"),
+        "filename": ("filename", "file_name", "文件名"),
+        "file_hash": ("file_hash", "文件哈希"),
+        "imported": ("imported", "imported_count", "导入数"),
+        "duplicate": (
+            "skipped_dup_po", "duplicate_count", "重复数",
+        ),
+        "settled": (
+            "skipped_settled", "settled_count", "历史跳过数",
+        ),
+        "conflict": (
+            "source_conflicts", "conflict_count", "来源冲突数",
+        ),
+        "invalid": ("invalid_count", "invalid", "错误数"),
+    }
+    po_log_detail_fields = {
+        "batch_id": ("batch_id", "批次ID"),
+        "source_row": ("source_row", "row", "源行号"),
+        "action": ("action", "result", "outcome", "结果"),
+        "project": ("project", "项目"),
+        "error": ("error", "error_message", "错误"),
+        "po_id": ("po_id", "PO ID"),
+        "source_key": ("source_key", "来源Key"),
+    }
+
+    def po_log_value(record, field_map, field):
+        for name in field_map[field]:
+            if name in record:
+                return record[name]
+        return None
+
+    po_log_baseline_bytes = req(
+        "GET", "/api/export/po-log", token=ET,
+    )[1]
+    po_log_baseline_workbook = load_workbook(
+        io.BytesIO(po_log_baseline_bytes), data_only=True,
+    )
+    chk(
+        "PO导入日志导出为含两表的有效XLSX",
+        {"导入批次", "行级明细"}.issubset(
+            po_log_baseline_workbook.sheetnames
+        ),
+        po_log_baseline_workbook.sheetnames,
+    )
+    baseline_batch_headers, baseline_po_log_batches = po_log_sheet_records(
+        po_log_baseline_workbook, "导入批次",
+    )
+    baseline_detail_headers, baseline_po_log_details = po_log_sheet_records(
+        po_log_baseline_workbook, "行级明细",
+    )
+    chk(
+        "PO导入日志导出包含批次和行级核心字段",
+        all(
+            any(name in baseline_batch_headers for name in aliases)
+            for aliases in po_log_batch_fields.values()
+        )
+        and all(
+            any(name in baseline_detail_headers for name in aliases)
+            for aliases in po_log_detail_fields.values()
+        ),
+        {
+            "batch_headers": baseline_batch_headers,
+            "detail_headers": baseline_detail_headers,
+        },
+    )
+
+    po_log_standard_project = "PO日志标准" + run_tag
+    po_log_standard_number = "PO-LOG-STANDARD-" + run_tag
+    po_log_standard_raw, po_log_standard_ct = mp(mk_xlsx([
+        ["译员", "结算月", "项目", "源语言", "目标语言", "角色",
+         "字数", "单价", "币种", "状态", "PO号"],
+        ["张明", "2027-02", po_log_standard_project, "ZH", "EN", "翻译",
+         1000, 180, "CNY", "未开票", po_log_standard_number],
+        ["张明", "2027-02", po_log_standard_project + "-重复",
+         "ZH", "EN", "翻译", 1000, 180, "CNY", "未开票",
+         po_log_standard_number],
+        ["不存在译员" + run_tag, "2027-02", po_log_standard_project + "-错误",
+         "ZH", "EN", "翻译", 1000, 180, "CNY", "未开票",
+         "PO-LOG-BAD-" + run_tag],
+    ]))
+    po_log_projectlist_new = "Projectlist日志新增" + run_tag
+    po_log_projectlist_settled = "Projectlist日志已结算" + run_tag
+    po_log_projectlist_invalid = "Projectlist日志错误" + run_tag
+    po_log_projectlist_raw, po_log_projectlist_ct = mp(mk_xlsx_sheets({
+        "Projectlist 日志": [
+            projectlist_secure_headers,
+            [
+                projectlist_identity_project, "2026-08-31", "英语",
+                filter_translator["name"], "翻译", 0.2, "CNY",
+                1000, 200, "8月", "简体中文", "□", "否",
+            ],
+            [
+                projectlist_identity_project, "2026-08-31", "英语",
+                projectlist_alias, "翻译", 0.25, "USD",
+                1200, None, "8月", "简体中文", "□", "否",
+            ],
+            [
+                po_log_projectlist_new, "2026-08-31", "英语",
+                filter_translator["name"], "翻译", 0.2, "CNY",
+                1000, 200, "8月", "简体中文", "□", "否",
+            ],
+            [
+                po_log_projectlist_settled, "2026-08-31", "英语",
+                "日志不存在译员" + run_tag, "翻译", 0.2, "CNY",
+                1000, 200, "8月", "简体中文", "✅", "否",
+            ],
+            [
+                po_log_projectlist_invalid, "2026-08-31", "英语",
+                filter_translator["name"], "配音", 50, "CNY",
+                1000, 50, "8月", "简体中文", "□", "否",
+            ],
+        ],
+    }))
+    req(
+        "POST", "/api/import/po?preview=true",
+        raw=po_log_standard_raw, token=ET, ct=po_log_standard_ct,
+    )
+    req(
+        "POST", "/api/import/po?preview=true&projectlist_po_state=all",
+        raw=po_log_projectlist_raw, token=ET, ct=po_log_projectlist_ct,
+    )
+    po_log_after_preview_workbook = load_workbook(io.BytesIO(req(
+        "GET", "/api/export/po-log", token=ET,
+    )[1]), data_only=True)
+    after_preview_batches = po_log_sheet_records(
+        po_log_after_preview_workbook, "导入批次",
+    )[1]
+    after_preview_details = po_log_sheet_records(
+        po_log_after_preview_workbook, "行级明细",
+    )[1]
+    chk(
+        "PO预览不产生批次或行级日志",
+        len(after_preview_batches) == len(baseline_po_log_batches)
+        and len(after_preview_details) == len(baseline_po_log_details),
+        {
+            "before": (
+                len(baseline_po_log_batches), len(baseline_po_log_details),
+            ),
+            "after": (len(after_preview_batches), len(after_preview_details)),
+        },
+    )
+
+    _, po_log_standard_import = req(
+        "POST", "/api/import/po",
+        raw=po_log_standard_raw, token=ET, ct=po_log_standard_ct,
+    )
+    _, po_log_projectlist_import = req(
+        "POST", "/api/import/po?projectlist_po_state=all",
+        raw=po_log_projectlist_raw, token=ET, ct=po_log_projectlist_ct,
+    )
+    final_po_log_workbook = load_workbook(io.BytesIO(req(
+        "GET", "/api/export/po-log", token=ET,
+    )[1]), data_only=True)
+    _, final_po_log_batches = po_log_sheet_records(
+        final_po_log_workbook, "导入批次",
+    )
+    _, final_po_log_details = po_log_sheet_records(
+        final_po_log_workbook, "行级明细",
+    )
+    standard_log_batches = [
+        row for row in final_po_log_batches
+        if po_log_value(
+            row, po_log_batch_fields, "file_hash",
+        ) == po_log_standard_import.get("file_hash")
+    ]
+    projectlist_log_batches = [
+        row for row in final_po_log_batches
+        if po_log_value(
+            row, po_log_batch_fields, "file_hash",
+        ) == po_log_projectlist_import.get("file_hash")
+    ]
+    standard_log_batch_id = po_log_value(
+        standard_log_batches[0], po_log_batch_fields, "id",
+    ) if len(standard_log_batches) == 1 else None
+    projectlist_log_batch_id = po_log_value(
+        projectlist_log_batches[0], po_log_batch_fields, "id",
+    ) if len(projectlist_log_batches) == 1 else None
+    standard_log_details = [
+        row for row in final_po_log_details
+        if po_log_value(row, po_log_detail_fields, "batch_id")
+        == standard_log_batch_id
+    ]
+    projectlist_log_details = [
+        row for row in final_po_log_details
+        if po_log_value(row, po_log_detail_fields, "batch_id")
+        == projectlist_log_batch_id
+    ]
+
+    def po_log_outcomes(rows):
+        return {
+            int(po_log_value(row, po_log_detail_fields, "source_row")):
+            po_log_value(row, po_log_detail_fields, "action")
+            for row in rows
+        }
+
+    standard_log_outcomes = po_log_outcomes(standard_log_details)
+    projectlist_log_outcomes = po_log_outcomes(projectlist_log_details)
+    chk(
+        "标准PO和Projectlist正式导入各产生一个批次日志",
+        len(final_po_log_batches) == len(baseline_po_log_batches) + 2
+        and len(final_po_log_details) == len(baseline_po_log_details) + 8
+        and len(standard_log_batches) == 1
+        and len(projectlist_log_batches) == 1
+        and po_log_value(
+            standard_log_batches[0], po_log_batch_fields, "source_format",
+        ) == "standard"
+        and po_log_value(
+            projectlist_log_batches[0], po_log_batch_fields, "source_format",
+        ) == "projectlist"
+        and po_log_value(
+            standard_log_batches[0], po_log_batch_fields, "filename",
+        ) == "x.xlsx"
+        and po_log_value(
+            projectlist_log_batches[0], po_log_batch_fields, "filename",
+        ) == "x.xlsx",
+        {
+            "standard": standard_log_batches,
+            "projectlist": projectlist_log_batches,
+        },
+    )
+    chk(
+        "PO导入批次统计与单一行级结果一致",
+        po_log_standard_import.get("imported") == 1
+        and po_log_standard_import.get("skipped_dup_po") == 1
+        and len(po_log_standard_import.get("invalid_rows", [])) == 1
+        and po_log_projectlist_import.get("imported") == 1
+        and po_log_projectlist_import.get("skipped_dup_po") == 1
+        and po_log_projectlist_import.get("skipped_settled") == 1
+        and po_log_projectlist_import.get("source_conflicts") == 1
+        and len(po_log_projectlist_import.get("invalid_rows", [])) == 2
+        and standard_log_outcomes == {
+            2: "imported", 3: "skip_duplicate", 4: "invalid",
+        }
+        and projectlist_log_outcomes == {
+            2: "skip_duplicate", 3: "source_conflict",
+            4: "imported", 5: "skip_settled", 6: "invalid",
+        }
+        and len(standard_log_details) == len(standard_log_outcomes)
+        and len(projectlist_log_details) == len(projectlist_log_outcomes)
+        and all(
+            int(po_log_value(batch, po_log_batch_fields, field)) == expected
+            for batch, expected_values in (
+                (standard_log_batches[0], (1, 1, 0, 0, 1)),
+                (projectlist_log_batches[0], (1, 1, 1, 1, 1)),
+            )
+            for field, expected in zip(
+                ("imported", "duplicate", "settled", "conflict", "invalid"),
+                expected_values,
+            )
+        ),
+        {
+            "standard_result": po_log_standard_import,
+            "projectlist_result": po_log_projectlist_import,
+            "standard_rows": standard_log_details,
+            "projectlist_rows": projectlist_log_details,
+        },
+    )
+    standard_log_by_row = {
+        int(po_log_value(row, po_log_detail_fields, "source_row")): row
+        for row in standard_log_details
+    }
+    projectlist_log_by_row = {
+        int(po_log_value(row, po_log_detail_fields, "source_row")): row
+        for row in projectlist_log_details
+    }
+    chk(
+        "PO日志XLSX含项目、错误及来源代表性数据",
+        po_log_value(
+            standard_log_by_row[2], po_log_detail_fields, "project",
+        ) == po_log_standard_project
+        and "译员不存在" in str(po_log_value(
+            standard_log_by_row[4], po_log_detail_fields, "error",
+        ))
+        and po_log_value(
+            projectlist_log_by_row[4], po_log_detail_fields, "project",
+        ) == po_log_projectlist_new
+        and "发生变化" in str(po_log_value(
+            projectlist_log_by_row[3], po_log_detail_fields, "error",
+        ))
+        and "工作类型" in str(po_log_value(
+            projectlist_log_by_row[6], po_log_detail_fields, "error",
+        ))
+        and po_log_value(
+            projectlist_log_by_row[2], po_log_detail_fields, "source_key",
+        ),
+        {
+            "standard": standard_log_details,
+            "projectlist": projectlist_log_details,
+        },
     )
     _, cumulative_summary = req("GET", "/api/po/summary?month=2026-11")
     chk(

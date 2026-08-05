@@ -25,7 +25,7 @@ Translator lifecycle, capability, rate, settlement, and risk management system f
 - Translator and PO grids use one Excel-style filtering workflow with value search, multi-select, blank values, typed text/number/date conditions, cross-column AND filtering, sorting, active-filter chips, and one-click clearing.
 - A searchable “More fields” header covers non-visible translator, related-business, and PO source fields with up to 20 combined conditions, including exact and ranged price filters.
 - PO settlement supports latest project-price matching, per-1k, hourly, fixed, and manual pricing, full manual correction, unpaid detail, and monthly/cumulative summaries.
-- Projectlist supports read-only mapping preview plus checked/unchecked `结算PO` filtering; checked rows are marked as historical. Financial writes remain hard-disabled until the PO quantity rule is confirmed.
+- Projectlist supports preview-and-confirm batch import with `结算PO` filtering. Translation, review, and MTPE use `译员WWC字数` with per-1k pricing; LQA/LQE use that column as hours; fixed-price CNY rows use the source fee. CNY totals are verified before import, settled/paid rows are skipped as history, and exact translator matching plus source keys prevent duplicates.
 - Translator names use stable IDs with persistent aliases. Excel rows carrying an existing translator ID overwrite that record and preserve the previous name as an alias.
 - Multiple encrypted payment accounts for WeChat, Alipay, personal bank, corporate CNY, and corporate USD; no default account is assigned, at least one information field is required, and QR codes are supported.
 - Controlled qualification-attachment upload, authenticated download, deletion, metadata, and signature checks.
