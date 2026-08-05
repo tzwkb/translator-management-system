@@ -36,3 +36,4 @@ docs/**/*.png
 .worktrees/
 .playwright-cli/
 output/
+outputs/

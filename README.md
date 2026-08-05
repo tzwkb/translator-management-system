@@ -95,7 +95,7 @@ python3 translator-mgmt-agent/test_client_payloads.py
 git diff --check
 ```
 
-Current acceptance baseline: `146/146`; LQE-rating boundaries `13/13`; monthly-capacity thresholds `6/6` plus cross-month allocation and data-integrity cases; twelve frontend static test scripts.
+Current acceptance baseline: `146/146`; LQE-rating boundaries `13/13`; monthly-capacity thresholds `6/6` plus cross-month allocation and data-integrity cases; thirteen frontend static test scripts.
 
 ## Remaining Work
 
