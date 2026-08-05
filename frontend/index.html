@@ -76,6 +76,18 @@
   .lang-option { display:block; width:100%; padding:7px 10px; border-radius:0; background:#fff; color:var(--ink); text-align:left; font-size:13px; font-family:inherit; }
   .lang-option:hover,.lang-option:focus { background:#eef3f8; }
   .lang-empty { padding:8px 10px; color:var(--muted); font-size:13px; }
+  .translator-combo { position:relative; display:inline-flex; align-items:center; width:100%; }
+  .translator-combo #p-translator_name { width:100%; padding-right:32px; }
+  .translator-trigger { position:absolute; top:1px; right:1px; bottom:1px; width:30px; padding:0; border-left:1px solid var(--line); border-radius:0 5px 5px 0; background:#f8fafc; color:var(--muted); font-size:11px; line-height:1; }
+  .translator-trigger:hover { background:var(--slate); color:var(--ink); }
+  .translator-menu { position:fixed; display:none; z-index:10000; max-height:260px; overflow:auto; border:1px solid var(--line); border-radius:7px; background:#fff; box-shadow:0 10px 26px rgba(29,33,37,.18); }
+  .translator-combo.open .translator-menu { display:block; }
+  .translator-option { display:flex; width:100%; align-items:center; justify-content:space-between; gap:12px; padding:8px 10px; border-radius:0; background:#fff; color:var(--ink); text-align:left; font-family:inherit; }
+  .translator-option:hover,.translator-option:focus { background:#eef3f8; }
+  .translator-option span { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .translator-option small { flex:none; color:var(--muted); font-size:11px; font-variant-numeric:tabular-nums; }
+  .translator-empty { padding:8px 10px; color:var(--muted); font-size:13px; }
+  .translator-id { color:#41484f; font-weight:600; }
   .actions { padding:13px 22px; display:flex; justify-content:flex-end; gap:10px; border-top:1px solid var(--line); }
   .empty { text-align:center; color:var(--muted); padding:34px; }
   .summary { padding:16px 22px 18px; }
@@ -261,7 +273,7 @@
   <section id="view-tr">
     <div class="cards" id="cards"></div>
     <div class="toolbar">
-      <input class="search" id="search" placeholder="搜索姓名 / 语言对 / 项目">
+      <input class="search" id="search" placeholder="搜索编号 / 姓名 / 语言对 / 项目">
       <label class="excel-hint">档期月份 <input id="capacityMonth" type="month" onchange="changeCapacityMonth(this.value)"></label>
       <span class="excel-hint">表头筛选 · 更多字段可筛选未展示信息</span>
       <span class="count" id="count"></span>
@@ -273,6 +285,7 @@
     </div>
     <div id="trExcelBar" class="excel-filter-bar" hidden></div>
     <div class="table-scroll"><table id="translatorTable" class="data-grid"><thead><tr>
+      <th data-excel-grid="tr" data-excel-field="id">唯一编号</th>
       <th data-excel-grid="tr" data-excel-field="name">姓名</th>
       <th data-excel-grid="tr" data-excel-field="entity_type">主体</th>
       <th data-excel-grid="tr" data-excel-field="gender">性别</th>
@@ -455,7 +468,12 @@
 <div class="mask" id="poMask"><div class="modal"><h2 id="poModalTitle">新增 PO 结算行</h2><button class="modal-close" type="button" onclick="closeModal('poMask')" aria-label="关闭弹窗" title="关闭">×</button>
   <div class="form">
     <input id="p-id" type="hidden">
-    <div class="field"><label>译员 <span class="req">*</span></label><select id="p-translator_id" onchange="fillPORate()"></select></div>
+    <div class="field"><label>译员 <span class="req">*</span></label><div class="translator-combo">
+      <input id="p-translator_id" type="hidden">
+      <input id="p-translator_name" placeholder="输入姓名或唯一编号" autocomplete="off" role="combobox" aria-autocomplete="list" aria-controls="p-translator-menu" aria-expanded="false" onfocus="openTranslatorMenu()" oninput="translatorInputChanged()" onchange="commitTranslatorInput()" onkeydown="translatorKeydown(event)">
+      <button class="translator-trigger" type="button" onclick="toggleTranslatorMenu()" aria-label="展开译员列表">▼</button>
+      <div id="p-translator-menu" class="translator-menu" role="listbox"></div>
+    </div></div>
     <div class="field"><label>结算月 <span class="req">*</span></label><input id="p-settlement_month" type="month"></div>
     <div class="field"><label>项目</label><input id="p-project" onchange="fillPORate()" onblur="fillPORate()"></div>
     <div class="field"><label>源语言</label><div class="lang-combo"><input id="p-source_lang" class="lang-input" placeholder="不指定" autocomplete="off" onfocus="openLangMenu(this)" oninput="fillPORate();openLangMenu(this)" onchange="fillPORate()" onkeydown="langKeydown(event)"><button class="lang-trigger" type="button" onclick="toggleLangMenu('p-source_lang')" aria-label="展开源语言列表">▼</button><div id="p-source_lang-menu" class="lang-menu" role="listbox"></div></div></div>
@@ -495,6 +513,7 @@ let EXCEL_MENU_STATE={grid:null,field:null,kind:null,allKeys:[],counts:new Map()
 let EXCEL_MORE_STATE={grid:null,kind:null};
 const EXCEL_COLUMNS={
   tr:{
+    id:{label:"唯一编号",kind:"number",value:row=>row.id},
     name:{label:"姓名",kind:"text",value:row=>row.name},
     entity_type:{label:"主体",kind:"text",value:row=>row.entity_type,format:entityTypeZh},
     gender:{label:"性别",kind:"text",value:row=>row.gender,format:genderZh},
@@ -569,7 +588,7 @@ function excelCompare(def,left,right) {
 }
 function translatorSearchRows() {
   const q=document.getElementById("search").value.trim().toLowerCase();
-  return DATA.filter(row=>!q||[row.name,row.language_pairs,currentProjectText(row)].some(value=>(value||"").toLowerCase().includes(q)));
+  return DATA.filter(row=>!q||[String(row.id),row.name,row.language_pairs,currentProjectText(row)].some(value=>(value||"").toLowerCase().includes(q)));
 }
 function excelBaseRows(grid) {
   if(grid==="tr")return translatorSearchRows();
@@ -1100,7 +1119,7 @@ async function load() {
   render();
 }
 function exportFiltered() {
-  const columns = ["name","native_language","language_pairs","internal_rating","domains","wechat","entity_type","gender","capacity_month","effective_availability","computed_availability","computed_load_pct"];
+  const columns = ["id","name","native_language","language_pairs","internal_rating","domains","wechat","entity_type","gender","capacity_month","effective_availability","computed_availability","computed_load_pct"];
   const visibleRows=applyExcelState("tr",translatorSearchRows());
   const csv = [columns.join(","), ...visibleRows.map(row=>columns.map(key=>`"${String(row[key]??"").replaceAll('"','""')}"`).join(","))].join("\n");
   const blob = new Blob(["\ufeff"+csv],{type:"text/csv;charset=utf-8"}), url=URL.createObjectURL(blob), a=document.createElement("a");
@@ -1116,6 +1135,7 @@ function render() {
     const d = daysTo(t.contract_expiry), w = d!=null && d>=0 && d<=30;
     const exp = t.contract_expiry ? `<span class="${w?"expiry-warn":""}">${t.contract_expiry}${w?" ⚠":""}</span>` : m();
     return `<tr>
+      <td class="num translator-id">${t.id}</td>
       <td><button class="namebtn" onclick="openDetail(${t.id})">${esc(t.name)}</button></td>
       <td>${detailVal(entityTypeZh(t.entity_type))}</td><td>${detailVal(genderZh(t.gender))}</td>
       <td>${esc(t.language_pairs)||m()}</td><td><span class="pill s-${t.status}">${statusZh(t.status)}</span></td>
@@ -1209,6 +1229,81 @@ function langPair(p){ return p && p.source_lang && p.target_lang ? `${esc(p.sour
 function renderLanguageOptions() {
   closeLangMenus();
 }
+function poTranslators() {
+  return PO_TRANSLATORS.length ? PO_TRANSLATORS : DATA;
+}
+function translatorMatches(query) {
+  const q=(query||"").trim().toLocaleLowerCase("zh-CN");
+  return poTranslators().filter(t=>!q||String(t.id).includes(q)||(t.name||"").toLocaleLowerCase("zh-CN").includes(q));
+}
+function positionTranslatorMenu() {
+  const combo=document.querySelector(".translator-combo"),menu=document.getElementById("p-translator-menu");
+  if(!combo||!menu||!combo.classList.contains("open"))return;
+  const rect=combo.getBoundingClientRect();
+  menu.style.left=Math.round(rect.left)+"px";
+  menu.style.top=Math.round(rect.bottom+4)+"px";
+  menu.style.width=Math.round(rect.width)+"px";
+}
+function openTranslatorMenu() {
+  const input=document.getElementById("p-translator_name"),menu=document.getElementById("p-translator-menu"),combo=input?.closest(".translator-combo");
+  if(!input||!menu||!combo)return;
+  closeLangMenus();
+  const options=translatorMatches(input.value);
+  menu.innerHTML=options.length
+    ? options.map(t=>`<button class="translator-option" type="button" role="option" data-id="${t.id}" onclick="pickTranslator(Number(this.dataset.id))"><span>${esc(t.name)}</span><small>唯一编号 ${t.id}</small></button>`).join("")
+    : `<div class="translator-empty">无匹配译员</div>`;
+  combo.classList.add("open");
+  input.setAttribute("aria-expanded","true");
+  positionTranslatorMenu();
+}
+function toggleTranslatorMenu() {
+  const input=document.getElementById("p-translator_name"),combo=input?.closest(".translator-combo");
+  if(!input||!combo)return;
+  if(combo.classList.contains("open")){closeTranslatorMenu();return;}
+  input.focus();
+  openTranslatorMenu();
+}
+function translatorInputChanged() {
+  document.getElementById("p-translator_id").value="";
+  document.getElementById("p-translator_name").removeAttribute("title");
+  openTranslatorMenu();
+}
+function commitTranslatorInput() {
+  const input=document.getElementById("p-translator_name"),selected=document.getElementById("p-translator_id");
+  if(!input||!selected||selected.value)return;
+  const query=input.value.trim(),normalized=query.toLocaleLowerCase("zh-CN");
+  const exact=poTranslators().filter(t=>String(t.id)===query||(t.name||"").trim().toLocaleLowerCase("zh-CN")===normalized);
+  if(exact.length===1)pickTranslator(exact[0].id);
+}
+function setPOTranslator(id) {
+  const translator=poTranslators().find(t=>Number(t.id)===Number(id));
+  const input=document.getElementById("p-translator_name"),selected=document.getElementById("p-translator_id");
+  if(!input||!selected)return;
+  selected.value=translator?.id??"";
+  input.value=translator?.name??"";
+  if(translator)input.title=`唯一编号 ${translator.id}`;
+  else input.removeAttribute("title");
+}
+function pickTranslator(id) {
+  setPOTranslator(id);
+  closeTranslatorMenu();
+  fillPORate();
+  document.getElementById("p-translator_name")?.focus();
+}
+function closeTranslatorMenu() {
+  const input=document.getElementById("p-translator_name"),combo=input?.closest(".translator-combo");
+  combo?.classList.remove("open");
+  input?.setAttribute("aria-expanded","false");
+}
+function translatorKeydown(event) {
+  const combo=event.target.closest(".translator-combo");
+  if(event.key==="Escape"){closeTranslatorMenu();return;}
+  if(event.key==="ArrowDown"){event.preventDefault();openTranslatorMenu();return;}
+  if(event.key==="Enter"&&combo?.classList.contains("open")){
+    const first=combo.querySelector(".translator-option");
+    if(first){event.preventDefault();pickTranslator(Number(first.dataset.id));}
+  }
+}
 function langInputHtml(id, placeholder, selected) {
   return `<div class="lang-combo"><input id="${id}" class="lang-input" value="${esc(selected||"")}" placeholder="${esc(placeholder)}" autocomplete="off" onfocus="openLangMenu(this)" oninput="openLangMenu(this)" onkeydown="langKeydown(event)"><button class="lang-trigger" type="button" onclick="toggleLangMenu('${id}')" aria-label="展开语言列表">▼</button><div id="${id}-menu" class="lang-menu" role="listbox"></div></div>`;
 }
@@ -1233,6 +1328,7 @@ function openLangMenu(input) {
   const combo = input.closest(".lang-combo");
   const menu = combo?.querySelector(".lang-menu");
   if (!combo || !menu) return;
+  closeTranslatorMenu();
   closeLangMenus(combo);
   const options = langMatches(input.value);
   menu.innerHTML = options.length
@@ -1338,7 +1434,7 @@ async function delEditLangPair(lpid) {
     renderEditLangPairs(id);
   } catch(e) {}
 }
-function closeModal(mk){ document.getElementById(mk).classList.remove("open"); }
+function closeModal(mk){ document.getElementById(mk).classList.remove("open"); closeLangMenus(); closeTranslatorMenu(); }
 async function saveTr() {
   const b = {}; TRF.forEach(f => { let v=document.getElementById("f-"+f).value.trim(); b[f]=v===""?null:v; });
   if (!b.name) { showToast("姓名必填", "error"); return; }
@@ -1417,6 +1513,7 @@ async function renderDetailSummary() {
       <div>
         <div class="profile-name">${esc(CUR.name)}</div>
         <div class="profile-meta">
+          <span class="chip">唯一编号 ${CUR.id}</span>
           <span class="chip ok">${esc(status)}</span>
           <span class="chip">${detailVal(entityTypeZh(CUR.entity_type))}</span>
           <span class="chip">评级 ${detailVal(CUR.internal_rating)}</span>
@@ -2177,8 +2274,7 @@ function selectedPOMonth() {
   return month();
 }
 function openPO() {
-  const translators=PO_TRANSLATORS.length?PO_TRANSLATORS:DATA;
-  document.getElementById("p-translator_id").innerHTML = translators.map(t=>`<option value="${t.id}">${esc(t.name)}</option>`).join("");
+  setPOTranslator(null);
   document.getElementById("p-id").value="";
   document.getElementById("poModalTitle").textContent="新增 PO 结算行";
   document.getElementById("p-source_lang").value = "";
@@ -2233,7 +2329,8 @@ async function savePO() {
     role:document.getElementById("p-role").value, pricing_mode:document.getElementById("p-pricing_mode").value,
     word_count:num("p-word_count"), rate:num("p-rate"), amount:num("p-amount"),
     currency:document.getElementById("p-currency").value, status:document.getElementById("p-status").value, po_number:val("p-po_number"), remarks:val("p-remarks")};
-  if (!b.translator_id || !b.settlement_month) { showToast("译员和结算月必填", "error"); return; }
+  if (!b.translator_id) { showToast("请从联想结果中选择译员", "error"); return; }
+  if (!b.settlement_month) { showToast("结算月必填", "error"); return; }
   if (!validatePOForm()) return;
   const id=val("p-id");
   try { const res = await api(id?"PUT":"POST",id?`/api/po/${id}`:"/api/po", b);
@@ -2242,11 +2339,10 @@ async function savePO() {
 }
 function editPO(id) {
   const p=PO_ROWS.find(row=>row.id===id);if(!p)return;
-  const translators=PO_TRANSLATORS.length?PO_TRANSLATORS:DATA;
-  document.getElementById("p-translator_id").innerHTML=translators.map(t=>`<option value="${t.id}">${esc(t.name)}</option>`).join("");
+  setPOTranslator(p.translator_id);
   document.getElementById("p-id").value=p.id;
   document.getElementById("poModalTitle").textContent="人工修正 PO";
-  ["translator_id","settlement_month","project","source_lang","target_lang","role","pricing_mode","word_count","rate","amount","currency","status","po_number","remarks"].forEach(key=>{
+  ["settlement_month","project","source_lang","target_lang","role","pricing_mode","word_count","rate","amount","currency","status","po_number","remarks"].forEach(key=>{
     const element=document.getElementById("p-"+key);if(element)element.value=p[key]??"";
   });
   updatePOPricing();
@@ -2289,9 +2385,11 @@ async function rejectPend(id){ try{ await api("POST",`/api/pending/${id}/reject`
 if (document.addEventListener) {
   document.addEventListener("click", e => {
     if (!e.target.closest(".lang-combo")) closeLangMenus();
+    if (!e.target.closest(".translator-combo")) closeTranslatorMenu();
     if (!e.target.closest("#excelFilterMenu")&&!e.target.closest("#excelMoreMenu")&&!e.target.closest(".excel-filter-trigger")&&!e.target.closest(".excel-more-trigger")) closeAllExcelMenus();
   });
   document.addEventListener("scroll", () => document.querySelectorAll(".lang-combo.open").forEach(positionLangMenu), true);
+  document.addEventListener("scroll", positionTranslatorMenu, true);
   document.addEventListener("scroll", e => {
     if(!document.getElementById("excelFilterMenu").contains(e.target)&&!document.getElementById("excelMoreMenu").contains(e.target))requestAnimationFrame(repositionExcelMenus);
   }, true);
@@ -2300,6 +2398,7 @@ if (document.addEventListener) {
 if (typeof window !== "undefined" && window.addEventListener) {
   window.addEventListener("resize", () => {
     document.querySelectorAll(".lang-combo.open").forEach(positionLangMenu);
+    positionTranslatorMenu();
     closeAllExcelMenus();
   });
 }
