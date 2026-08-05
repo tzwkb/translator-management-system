@@ -2,8 +2,9 @@
 from datetime import datetime
 from typing import Optional
 
-from sqlalchemy import (BigInteger, Boolean, DateTime, ForeignKey, Index, Integer,
-                        LargeBinary, Numeric, String, Text, UniqueConstraint, text)
+from sqlalchemy import (BigInteger, Boolean, CheckConstraint, DateTime,
+                        ForeignKey, Index, Integer, LargeBinary, Numeric, String,
+                        Text, UniqueConstraint, text)
 from sqlalchemy.orm import Mapped, mapped_column
 
 from .db import Base
@@ -270,6 +271,70 @@ class PO(Base):
                 "pricing_mode": self.pricing_mode, "source_key": self.source_key,
                 "source_name": self.source_name, "source_row": self.source_row,
                 "remarks": self.remarks}
+
+
+class POImportBatch(Base):
+    __tablename__ = "po_import_batches"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    created_by: Mapped[str] = mapped_column(String(50))
+    source_format: Mapped[str] = mapped_column(String(20), index=True)
+    parser_version: Mapped[str] = mapped_column(String(30))
+    file_name: Mapped[str] = mapped_column(String(255))
+    file_hash: Mapped[str] = mapped_column(String(64), index=True)
+    sheet: Mapped[Optional[str]] = mapped_column(String(255))
+    header_row: Mapped[Optional[int]] = mapped_column(Integer)
+    projectlist_po_state: Mapped[Optional[str]] = mapped_column(String(20))
+    selected_rows: Mapped[int] = mapped_column(Integer, default=0)
+    ignored_rows: Mapped[int] = mapped_column(Integer, default=0)
+    imported: Mapped[int] = mapped_column(Integer, default=0)
+    skipped_duplicate: Mapped[int] = mapped_column(Integer, default=0)
+    skipped_settled: Mapped[int] = mapped_column(Integer, default=0)
+    source_conflicts: Mapped[int] = mapped_column(Integer, default=0)
+    invalid_count: Mapped[int] = mapped_column(Integer, default=0)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, default=datetime.now, index=True,
+    )
+
+
+class POImportRowLog(Base):
+    __tablename__ = "po_import_row_logs"
+    __table_args__ = (
+        CheckConstraint(
+            "action IN ('imported', 'skip_duplicate', 'skip_settled', "
+            "'source_conflict', 'invalid', 'ignored')",
+            name="ck_po_import_row_logs_action",
+        ),
+        UniqueConstraint(
+            "batch_id", "sheet", "source_row",
+            name="uq_po_import_row_logs_batch_sheet_row",
+        ),
+    )
+    id: Mapped[int] = mapped_column(primary_key=True)
+    batch_id: Mapped[int] = mapped_column(
+        ForeignKey("po_import_batches.id"),
+        index=True,
+    )
+    sheet: Mapped[str] = mapped_column(String(255))
+    source_row: Mapped[int] = mapped_column(Integer)
+    action: Mapped[str] = mapped_column(String(30), index=True)
+    selected: Mapped[bool] = mapped_column(Boolean, default=True)
+    po_id: Mapped[Optional[int]] = mapped_column(Integer)
+    translator_id: Mapped[Optional[int]] = mapped_column(Integer)
+    translator_name: Mapped[Optional[str]] = mapped_column(String(200))
+    project: Mapped[Optional[str]] = mapped_column(String(200))
+    settlement_month: Mapped[Optional[str]] = mapped_column(String(7))
+    role: Mapped[Optional[str]] = mapped_column(String(50))
+    source_lang: Mapped[Optional[str]] = mapped_column(String(20))
+    target_lang: Mapped[Optional[str]] = mapped_column(String(20))
+    pricing_mode: Mapped[Optional[str]] = mapped_column(String(20))
+    word_count: Mapped[Optional[float]] = mapped_column(Numeric(14, 2))
+    rate: Mapped[Optional[float]] = mapped_column(Numeric(14, 6))
+    amount: Mapped[Optional[float]] = mapped_column(Numeric(14, 2))
+    source_fee_cny: Mapped[Optional[float]] = mapped_column(Numeric(14, 2))
+    currency: Mapped[Optional[str]] = mapped_column(String(10))
+    source_key: Mapped[Optional[str]] = mapped_column(String(64))
+    error_code: Mapped[Optional[str]] = mapped_column(String(50))
+    error_message: Mapped[Optional[str]] = mapped_column(Text)
 
 
 class Contract(Base):

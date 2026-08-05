@@ -12,6 +12,8 @@ from sqlalchemy.orm import Session
 from app.models import (
     Base,
     CapacityMonthOverride,
+    POImportBatch,
+    POImportRowLog,
     Translator,
     TranslatorAlias,
     TranslatorProjectExperience,
@@ -22,7 +24,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[2]
 BACKEND_DIR = PROJECT_ROOT / "backend"
 ALEMBIC_CONFIG = BACKEND_DIR / "alembic.ini"
 INITIAL_REVISION = "20260717_0001"
-HEAD_REVISION = "20260731_0007"
+HEAD_REVISION = "20260805_0008"
 EXPECTED_TABLES = {
     "audit_logs",
     "capacity_month_overrides",
@@ -33,6 +35,8 @@ EXPECTED_TABLES = {
     "payment_accounts",
     "pending_changes",
     "pending_idempotency",
+    "po_import_batches",
+    "po_import_row_logs",
     "po_settlements",
     "project_prices",
     "quality_scores",
@@ -66,8 +70,99 @@ def assert_ok(result):
     assert result.returncode == 0, result.stdout + result.stderr
 
 
+def assert_po_import_log_schema(inspector):
+    assert POImportBatch.__tablename__ == "po_import_batches"
+    assert POImportRowLog.__tablename__ == "po_import_row_logs"
+    batch_columns = {
+        item["name"]: item
+        for item in inspector.get_columns("po_import_batches")
+    }
+    assert set(batch_columns) == {
+        "id", "created_by", "source_format", "parser_version", "file_name",
+        "file_hash", "sheet", "header_row", "projectlist_po_state",
+        "selected_rows", "ignored_rows", "imported", "skipped_duplicate",
+        "skipped_settled", "source_conflicts", "invalid_count", "created_at",
+    }
+    assert {
+        name for name, item in batch_columns.items() if item["nullable"]
+    } == {"sheet", "header_row", "projectlist_po_state"}
+    assert batch_columns["file_hash"]["type"].length == 64
+    batch_indexes = {
+        item["name"]: item
+        for item in inspector.get_indexes("po_import_batches")
+    }
+    assert set(batch_indexes) == {
+        "ix_po_import_batches_created_at",
+        "ix_po_import_batches_file_hash",
+        "ix_po_import_batches_source_format",
+    }
+    assert all(not item["unique"] for item in batch_indexes.values())
+    assert not inspector.get_unique_constraints("po_import_batches")
+    assert not inspector.get_foreign_keys("po_import_batches")
+
+    row_columns = {
+        item["name"]: item
+        for item in inspector.get_columns("po_import_row_logs")
+    }
+    assert set(row_columns) == {
+        "id", "batch_id", "sheet", "source_row", "action", "selected",
+        "po_id", "translator_id", "translator_name", "project",
+        "settlement_month", "role", "source_lang", "target_lang",
+        "pricing_mode", "word_count", "rate", "amount", "source_fee_cny",
+        "currency", "source_key", "error_code", "error_message",
+    }
+    assert {
+        name for name, item in row_columns.items() if not item["nullable"]
+    } == {"id", "batch_id", "sheet", "source_row", "action", "selected"}
+    assert row_columns["word_count"]["type"].precision == 14
+    assert row_columns["word_count"]["type"].scale == 2
+    assert row_columns["rate"]["type"].precision == 14
+    assert row_columns["rate"]["type"].scale == 6
+    assert row_columns["amount"]["type"].precision == 14
+    assert row_columns["amount"]["type"].scale == 2
+    assert row_columns["source_fee_cny"]["type"].precision == 14
+    assert row_columns["source_fee_cny"]["type"].scale == 2
+    assert row_columns["source_key"]["type"].length == 64
+    row_indexes = {
+        item["name"]: item
+        for item in inspector.get_indexes("po_import_row_logs")
+    }
+    assert set(row_indexes) == {
+        "ix_po_import_row_logs_action",
+        "ix_po_import_row_logs_batch_id",
+    }
+    assert all(not item["unique"] for item in row_indexes.values())
+    row_unique = {
+        item["name"]: item
+        for item in inspector.get_unique_constraints("po_import_row_logs")
+    }
+    assert row_unique[
+        "uq_po_import_row_logs_batch_sheet_row"
+    ]["column_names"] == ["batch_id", "sheet", "source_row"]
+    row_foreign_keys = inspector.get_foreign_keys("po_import_row_logs")
+    assert any(
+        key["constrained_columns"] == ["batch_id"]
+        and key["referred_table"] == "po_import_batches"
+        and key["referred_columns"] == ["id"]
+        for key in row_foreign_keys
+    )
+    row_checks = {
+        item["name"]: item
+        for item in inspector.get_check_constraints("po_import_row_logs")
+    }
+    action_check = row_checks["ck_po_import_row_logs_action"]["sqltext"]
+    assert all(
+        action in action_check
+        for action in (
+            "imported", "skip_duplicate", "skip_settled",
+            "source_conflict", "invalid", "ignored",
+        )
+    )
+
+
 def assert_profile_schema(engine):
     inspector = inspect(engine)
+    assert_po_import_log_schema(inspector)
     alias_columns = {
         item["name"]: item
         for item in inspector.get_columns("translator_aliases")
