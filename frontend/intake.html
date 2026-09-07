@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="referrer" content="no-referrer">
+  <title>译员资料登记 · Langlobal</title>
+  <link rel="stylesheet" href="/intake-assets/public.css">
+  <script src="/intake-assets/public.js" defer></script>
+</head>
+<body>
+  <header class="brand"><a href="#" aria-label="Langlobal" id="brandLink">LANGLOBAL<span>Language connects us.</span></a><span>译员合作 · Translator network</span></header>
+  <main>
+    <div class="intro"><p class="eyebrow">LET’S WORK TOGETHER</p><h1>译员资料登记<span lang="en">Your translator profile</span></h1><p>告诉我们您擅长的语言与项目。提交后，资源负责人会核对资料并与您联系。<br><span lang="en">Share your languages and experience. Our coordinator will review your profile and contact you.</span></p></div>
+    <div id="loading" class="notice" role="status">正在读取邀请 · Loading your invitation…</div>
+    <div id="pageError" class="notice error" role="alert" hidden></div>
+    <section id="receipt" class="receipt" tabindex="-1" hidden>
+      <span class="receipt-mark" aria-hidden="true">✓</span><h2 id="receiptTitle"></h2><p id="receiptText"></p><p id="receiptMeta" class="muted"></p><p id="receiptNote" class="notice" hidden></p><button type="button" id="refreshStatus">刷新状态 / Refresh status</button>
+    </section>
+    <div id="workspace" class="workspace" hidden>
+      <aside>
+        <div class="invitation"><span class="eyebrow">YOUR INVITATION</span><strong id="inviteEmail"></strong><p id="inviteExpiry"></p></div>
+        <nav aria-label="填写内容 / Form sections"><a href="#contact">基本资料<span>Contact details</span></a><a href="#skills">语言与报价<span>Languages &amp; rates</span></a><a href="#experience">项目经历<span>Project experience</span></a></nav>
+        <p class="aside-note">标 * 为必填。请在提交前保持本页打开。<br><span lang="en">* Required. Keep this page open until you submit.</span></p>
+      </aside>
+      <form id="intakeForm">
+        <div id="reopenNote" class="notice" hidden></div>
+        <div id="updateNote" class="notice" hidden>这是资料更新邀请。选填项留空会保留原资料；语言对和项目经历无需重复填写未变化的内容。<br><span lang="en">This is a profile update. Blank optional fields keep existing values; only add languages and projects you want to submit.</span></div>
+        <section class="form-section" id="contact">
+          <div class="section-heading"><h2>基本资料 <span>Contact details</span></h2><p>用于建档与合作联系 / For your profile and project contact</p></div>
+          <div class="fields">
+            <label>姓名 / Name *<input name="name" autocomplete="name" maxlength="100" required></label>
+            <label>邮箱 / Email *<input name="email" type="email" autocomplete="email" maxlength="200" readonly required><small>与本次邀请绑定 / Linked to this invitation</small></label>
+            <label>母语 / Native language *<input name="native_language" maxlength="50" placeholder="例如 / e.g. English、中文" required></label>
+            <label>性别 / Gender *<select name="gender" required><option value="">请选择 / Select</option><option value="male">男 / Male</option><option value="female">女 / Female</option></select></label>
+            <label>合作主体 / Entity type *<select name="entity_type" required><option value="">请选择 / Select</option><option value="individual">个人译员 / Individual</option><option value="vendor">供应商 / Vendor</option></select></label>
+            <label>微信 / WeChat<input name="wechat" maxlength="100"></label>
+            <label>所在地 / Location<input name="location" maxlength="200" autocomplete="address-level2" placeholder="城市、国家 / City, country"></label>
+            <label>时区 / Time zone<input name="timezone" maxlength="50" placeholder="例如 / e.g. UTC+8"></label>
+          </div>
+        </section>
+        <section class="form-section" id="skills">
+          <div class="section-heading"><h2>语言与报价 <span>Languages &amp; rates</span></h2><p>至少填写一组语言对。报价可留空，由资源负责人确认。<br>Include at least one language pair. Rates are optional and subject to review.</p></div>
+          <div class="rate-guide">翻译 / 审校 / MTPE：每千字或词 · per 1,000 source characters or words<br>LQA / LQE：每小时 · per hour</div>
+          <div id="languagePairs"></div>
+          <button class="secondary add" type="button" id="addPair">+ 添加语言对 / Add language pair</button>
+          <div class="fields ability-fields">
+            <label>擅长领域 / Specializations<input name="domains" maxlength="2000" placeholder="例如 / e.g. 游戏、医疗 / Games, medical"></label>
+            <label>文本类型 / Content types<input name="text_types" maxlength="2000" placeholder="例如 / e.g. UI、对话、营销 / UI, dialogue, marketing"></label>
+            <label>CAT 工具 / CAT tools<input name="cat_tools" maxlength="2000" placeholder="例如 / e.g. Trados、memoQ"></label>
+            <label>日产量 / Daily capacity<input name="daily_output" type="number" min="0" max="1000000" step="1"><small>字或词 / Source characters or words per day</small></label>
+          </div>
+        </section>
+        <section class="form-section" id="experience">
+          <div class="section-heading"><h2>项目经历 <span>Project experience</span></h2><p>可选。涉密项目请用代称。当前项目需填写剩余量与排期。<br>Optional. Use an alias for confidential projects. For ongoing work, include remaining volume and dates.</p></div>
+          <p id="projectEmpty" class="muted">可添加过往或当前项目。/ Add past or ongoing projects.</p>
+          <div id="projects"></div><button class="secondary add" type="button" id="addProject">+ 添加项目 / Add project</button>
+        </section>
+        <section class="form-section submit-section">
+          <label>补充说明 / Additional notes<textarea name="remarks" rows="3" maxlength="4000" placeholder="希望资源负责人了解的其他信息 / Anything else your coordinator should know"></textarea></label>
+          <label class="consent"><input name="consent" type="checkbox" required><span>我确认资料真实，并同意 Langlobal 将这些资料用于译员建档和合作联系。<br><span lang="en">I confirm this information is accurate and agree to Langlobal using it for my translator profile and collaboration contact.</span></span></label>
+          <div id="formError" class="notice error" role="alert" hidden></div>
+          <div class="submit-row"><p>提交后等待审核；如需修改，请联系资源负责人。<br>After submitting, contact your coordinator for changes.</p><button type="submit" id="submitButton">提交资料 / Submit profile <span aria-hidden="true">→</span></button></div>
+        </section>
+      </form>
+    </div>
+  </main>
+  <footer>LANGLOBAL · 译员资料收集 / Translator profile intake</footer>
+</body>
+</html>

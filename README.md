@@ -26,11 +26,13 @@ Translator lifecycle, capability, rate, settlement, and risk management system f
 - A searchable “More fields” header covers non-visible translator, related-business, and PO source fields with up to 20 combined conditions, including exact and ranged price filters.
 - PO settlement supports latest project-price matching, per-1k, hourly, fixed, and manual pricing, full manual correction, unpaid detail, and monthly/cumulative summaries.
 - Projectlist supports preview-and-confirm batch import with `结算PO` filtering. Translation, review, and MTPE use `译员WWC字数` with per-1k pricing; LQA/LQE use that column as hours; fixed-price CNY rows use the source fee. CNY totals are verified before import, settled/paid rows are skipped as history, and exact translator matching plus source keys prevent duplicates.
+- Formal standard-PO and Projectlist imports persist batch-level and row-level outcomes. Editors can export `PO_Log.xlsx` with separate import-batch and row-detail sheets; previews and structural HTTP 400 failures do not create import logs.
 - Translator names use stable IDs with persistent aliases. Excel rows carrying an existing translator ID overwrite that record and preserve the previous name as an alias.
 - Multiple encrypted payment accounts for WeChat, Alipay, personal bank, corporate CNY, and corporate USD; no default account is assigned, at least one information field is required, and QR codes are supported.
 - Controlled qualification-attachment upload, authenticated download, deletion, metadata, and signature checks.
 - Strict request validation for dates, months, enums, email, non-negative values, and percentage ranges.
-- Translator Excel import/export with gender, entity type, and a separate project-experience sheet; duplicate rows and validation errors are reported.
+- Translator Excel import/export with a downloadable blank template for profiles, project experience, aliases, and instructions. The template includes required gender; import selects the named profile sheet regardless of the active sheet and reports duplicates and validation errors.
+- Translator intake links: email-bound invitations, a bilingual mobile form, revision requests, staff review and explicit duplicate merging. Approval writes profiles transactionally; rates require separate confirmation. The public ASGI entry exposes only intake routes. See the [intake guide](docs/按日期/2026-09-07/已实施/译员自填链接使用说明.md).
 - Standard PO/settlement Excel import with duplicate-PO skipping, invalid-row reporting, and language-pair rate lookup.
 - LQE import, audit log, role-based access control, payment masking/encryption, and agent pending-review workflow.
 - Safe agent writes with dry-run previews, idempotency keys, and active-pending content deduplication.
@@ -41,12 +43,13 @@ Translator lifecycle, capability, rate, settlement, and risk management system f
 cd "/Users/spellbook/Desktop/Langlobal/译员管理系统/backend"
 python3 -m venv .venv
 .venv/bin/pip install -r requirements.txt
+.venv/bin/python -m alembic -c alembic.ini upgrade head
 ./run.sh
 ```
 
 Open [http://127.0.0.1:8000/](http://127.0.0.1:8000/).
 
-The local demo database is created automatically when empty. The encryption key file is generated at `backend/.key` unless `AES_KEY` is provided.
+Run the migrations before starting the application. Empty databases stay empty by default; set `SEED_DEMO_DATA=1` only when you explicitly want demo records. The encryption key file is generated at `backend/.key` unless `AES_KEY` is provided.
 
 ## Run with Docker
 
@@ -95,7 +98,7 @@ python3 translator-mgmt-agent/test_client_payloads.py
 git diff --check
 ```
 
-Current acceptance baseline: `146/146`; LQE-rating boundaries `13/13`; monthly-capacity thresholds `6/6` plus cross-month allocation and data-integrity cases; thirteen frontend static test scripts.
+Current acceptance baseline: `159/159`; translator-intake checks `33/33`; template checks `7/7`; LQE-rating boundaries `13/13`; monthly-capacity thresholds `6/6` plus cross-month allocation and data-integrity cases; thirteen frontend static test scripts.
 
 ## Remaining Work
 

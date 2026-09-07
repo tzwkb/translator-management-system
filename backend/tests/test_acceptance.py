@@ -134,6 +134,7 @@ def start_isolated_server():
     env["JWT_SECRET"] = "acceptance-test-secret"
     env["AES_KEY"] = "0" * 64
     env["TOKEN_TTL"] = "3600"
+    env["SEED_DEMO_DATA"] = "1"
     env["UPLOAD_DIR"] = str(Path(TMPDIR.name) / "uploads")
     migration = subprocess.run(
         [sys.executable, "-m", "alembic", "-c", "alembic.ini", "upgrade", "head"],

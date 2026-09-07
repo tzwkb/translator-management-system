@@ -24,7 +24,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[2]
 BACKEND_DIR = PROJECT_ROOT / "backend"
 ALEMBIC_CONFIG = BACKEND_DIR / "alembic.ini"
 INITIAL_REVISION = "20260717_0001"
-HEAD_REVISION = "20260805_0008"
+HEAD_REVISION = "20260907_0009"
 EXPECTED_TABLES = {
     "audit_logs",
     "capacity_month_overrides",
@@ -44,6 +44,8 @@ EXPECTED_TABLES = {
     "translator_project_experiences",
     "translator_aliases",
     "translator_attachments",
+    "translator_intake_invites",
+    "translator_intake_submissions",
     "translators",
 }
 

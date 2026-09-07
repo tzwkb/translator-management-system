@@ -267,6 +267,7 @@
     <button class="tab on" id="tab-tr" onclick="showTab('tr')">译员主表</button>
     <button class="tab" id="tab-po" onclick="showTab('po')">PO 结算</button>
     <button class="tab" id="tab-pending" onclick="showTab('pending')">待审核</button>
+    <button class="tab edit-only" id="tab-intake" onclick="showTab('intake')">资料收集</button>
     <button class="tab" id="tab-audit" onclick="showTab('audit')">审计日志</button>
   </div>
 
@@ -277,6 +278,7 @@
       <label class="excel-hint">档期月份 <input id="capacityMonth" type="month" onchange="changeCapacityMonth(this.value)"></label>
       <span class="excel-hint">表头筛选 · 更多字段可筛选未展示信息</span>
       <span class="count" id="count"></span>
+      <button class="btn-ghost" onclick="downloadTranslatorTemplate()" title="下载与当前导入规则同步的空白模板">下载导入模板</button>
       <button class="btn-ghost" onclick="exportTr()">导出 Excel</button>
       <button class="btn-ghost" onclick="exportFiltered()">导出筛选结果</button>
       <label class="btn-ghost edit-only" style="display:inline-block">导入 Excel<input type="file" accept=".xlsx" style="display:none" onchange="importTr(this)"></label>
@@ -337,6 +339,37 @@
       <th>操作</th>
     </tr></thead><tbody id="poRows"></tbody></table></div>
     <div class="empty" id="poEmpty" style="display:none">没有匹配的结算记录</div>
+  </section>
+
+  <section id="view-intake" style="display:none">
+    <div class="secbox" style="margin-bottom:16px">
+      <h2 style="margin:0 0 6px;font-size:17px">生成译员自填链接</h2>
+      <p class="muted">每人一条链接。译员提交后在此审核；报价需单独确认。</p>
+      <form id="intakeInviteForm" class="addrow">
+        <div class="field"><label for="intakeEmail">邀请邮箱 *</label><input id="intakeEmail" type="email" maxlength="200" required></div>
+        <div class="field"><label for="intakeTranslatorId">更新已有译员（选填ID）</label><input id="intakeTranslatorId" type="number" min="1" step="1" placeholder="留空则申请新建档案"></div>
+        <div class="field"><label for="intakeExpiry">链接有效期</label><select id="intakeExpiry"><option value="14">14 天</option><option value="7">7 天</option><option value="30">30 天</option></select></div>
+        <button id="intakeCreateButton" class="btn-primary" type="submit">生成链接</button>
+      </form>
+      <div id="intakeLinkBox" hidden style="margin-top:12px">
+        <p id="intakeLinkHint" class="muted"></p>
+        <label for="intakeLink">邀请链接（仅显示一次，请复制保存）</label>
+        <textarea id="intakeLink" readonly rows="2" style="width:100%;margin:6px 0"></textarea>
+        <button type="button" class="btn-ghost" onclick="copyIntakeLink()">复制链接</button>
+        <a id="intakePreview" target="_blank" rel="noopener noreferrer" class="btn-link">打开填写页</a>
+      </div>
+    </div>
+    <div class="toolbar">
+      <button type="button" class="btn-ghost" onclick="setIntakeMode('submissions')">提交资料</button>
+      <button type="button" class="btn-ghost" onclick="setIntakeMode('invites')">邀请记录</button>
+      <select id="intakeStatus" aria-label="申请状态" onchange="resetIntakePage()"><option value="pending">待审核</option><option value="needs_info">需补充</option><option value="approved">已入库</option><option value="rejected">已拒绝</option><option value="">全部申请</option></select>
+      <span id="intakeListLabel" class="count"></span>
+      <button type="button" class="btn-ghost" onclick="loadIntake()">刷新</button>
+      <button type="button" class="btn-link" id="intakePrev" onclick="pageIntake(-1)">上一页</button>
+      <button type="button" class="btn-link" id="intakeNext" onclick="pageIntake(1)">下一页</button>
+    </div>
+    <div id="intakeRows" class="table-scroll"></div>
+    <section id="intakeReview" class="secbox" hidden style="margin-top:18px"></section>
   </section>
 
   <section id="view-audit" style="display:none">
@@ -1030,6 +1063,14 @@ async function switchRole() {
   try { d = await (await fetch("/api/login",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({user})})).json(); }
   catch (e) { TOKEN=""; ROLE="viewer"; document.body.classList.add("viewer"); hint.textContent="登录失败·只读"; hint.className="rolehint ro"; return; }
   TOKEN = d.token; ROLE = d.role;
+  document.getElementById("tab-intake").hidden = ROLE !== "editor";
+  if (ROLE !== "editor") {
+    document.getElementById("intakeLink").value = "";
+    document.getElementById("intakeLinkBox").hidden = true;
+    document.getElementById("intakeRows").replaceChildren();
+    document.getElementById("intakeReview").replaceChildren();
+    if (document.getElementById("tab-intake").classList.contains("on")) showTab("tr");
+  }
   document.body.classList.toggle("viewer", ROLE === "viewer");
   if (ROLE === "viewer") { hint.textContent = "只读视角"; hint.className = "rolehint ro"; }
   else if (ROLE === "agent") { hint.textContent = "Agent · 费率/PO 改动进待审"; hint.className = "rolehint ag"; }
@@ -1075,13 +1116,14 @@ const get = p => fetch(p).then(r => r.json());
 /* ---- 标签 ---- */
 function showTab(t) {
   closeAllExcelMenus();
-  ["tr","po","pending","audit"].forEach(x => {
+  ["tr","po","pending","audit","intake"].forEach(x => {
     document.getElementById("view-"+x).style.display = x===t ? "" : "none";
     document.getElementById("tab-"+x).classList.toggle("on", x===t);
   });
   if (t==="po") loadPO();
   if (t==="pending") loadPending();
   if (t==="audit") loadAudit();
+  if (t==="intake") loadIntake();
 }
 
 /* ---- 译员主表 ---- */
@@ -1451,6 +1493,7 @@ async function delTr(id, name) {
   try { await api("DELETE","/api/translators/"+id); load(); } catch(e){}
 }
 function exportTr(){ window.location = "/api/export/translators"; }
+function downloadTranslatorTemplate(){ window.location = "/api/export/translator-template"; }
 async function importTr(input) {
   const f = input.files[0]; input.value=""; if (!f) return;
   const fd = new FormData(); fd.append("file", f);
@@ -2437,5 +2480,6 @@ document.getElementById("capacityMonth").value=CAPACITY_MONTH;
 initExcelHeaders();
 switchRole();   // 默认以资源端登录并加载
 </script>
+<script src="/intake-admin.js"></script>
 </body>
 </html>

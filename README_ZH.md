@@ -26,11 +26,13 @@
 - “更多字段”覆盖未展示的译员主表、业务子表和 PO 来源字段，最多组合 20 条条件；价格可按精确值、上下限或区间筛选。
 - PO 支持最新项目价格自动匹配、按千字、按小时、一口价和手工金额、完整人工修正、未结算明细，以及当月与跨月累计未付。
 - Projectlist 支持预览确认后批量导入及“结算PO”状态筛选；翻译/审校/MTPE 按 `译员WWC字数` 千字计价，LQA/LQE 按该列记录的小时数计价，一口价取 CNY 稿费金额。CNY 行导入前自动验算，已结算/已打款行作为历史记录跳过，并使用精确译员匹配和来源键防重。
+- 标准 PO 与 Projectlist 的正式导入结果会保存为批次和行级日志；editor 可导出含“导入批次”“行级明细”的 `PO_Log.xlsx`。preview 和结构性 HTTP 400 不写导入日志。
 - 译员通过稳定 ID 关联持久名称映射；Excel 携带已有译员 ID 时覆盖原记录，并自动把旧姓名保存为名称映射。
 - 微信、支付宝、个人银行卡、对公人民币、对公美元多支付账户；不设默认账户，各字段可空但至少填写一项，敏感字段加密脱敏并支持收款码。
 - 资质附件受控上传、登录下载、删除、元数据和文件签名校验。
 - 字段格式验证：真实日期、真实月份、枚举、邮箱、非负数、百分比范围等。
-- Excel 译员导入导出：按邮箱去重，支持性别、主体类型及独立“项目经历”工作表，非法行返回明细。
+- Excel 译员导入导出：首页可下载空白标准模板（译员、项目经历、名称映射及填写说明），按邮箱去重，非法行返回明细。新版模板包含必填性别，导入时按主表名称识别，不受保存时活动页影响。
+- 译员自填：“资料收集”生成邮箱绑定邀请，中英双语手机表单、待审/退回补充/拒绝、差异审核与人工合并。批准后事务入库，报价单独确认；公开 ASGI 入口仅暴露申请接口。见 [自填链接使用说明](docs/按日期/2026-09-07/已实施/译员自填链接使用说明.md)。
 - 标准 PO / 结算 Excel 导入：支持重复 PO 跳过、错误行报告、语言对自动取价。
 - LQE 导入、加密脱敏、RBAC、agent 钱相关待审护栏。
 - Agent 写入安全：支持 dry-run、幂等键和活动待审内容防重。
@@ -47,7 +49,7 @@ python3 -m venv .venv
 
 浏览器打开：[http://127.0.0.1:8000/](http://127.0.0.1:8000/)
 
-应先执行 `alembic upgrade head`，迁移成功后再启动服务。首次启动库为空时会写入示例数据。加密 key 默认生成到 `backend/.key`，生产环境应改用固定 `AES_KEY` 环境变量。
+应先执行 `alembic upgrade head`，迁移成功后再启动服务。空库默认保持为空；仅在显式设置 `SEED_DEMO_DATA=1` 时写入演示数据。加密 key 默认生成到 `backend/.key`，生产环境应改用固定 `AES_KEY` 环境变量。
 
 ## Docker 本地启动
 
@@ -106,6 +108,9 @@ BASE=http://127.0.0.1:8000 backend/.venv/bin/python backend/tests/test_acceptanc
 
 ```bash
 backend/.venv/bin/python backend/tests/test_acceptance_isolation.py
+backend/.venv/bin/python backend/tests/test_translator_template.py
+backend/.venv/bin/python backend/tests/test_translator_intake.py
+backend/.venv/bin/python backend/tests/test_seed_startup.py
 PYTHONPATH=backend backend/.venv/bin/python backend/tests/test_pending_idempotency.py
 PYTHONPATH=backend backend/.venv/bin/python backend/tests/test_migrations.py
 PYTHONPATH=backend backend/.venv/bin/python backend/tests/test_docker_startup.py
@@ -118,7 +123,7 @@ python3 translator-mgmt-agent/test_client_payloads.py
 git diff --check
 ```
 
-当前验收基线：`146/146`；LQE 评级边界 `13/13`；月度产能阈值 `6/6` 并通过跨月分摊、字数守恒和数据完整性用例；前端静态测试 13 个脚本。
+当前验收基线：`159/159`；译员自填专项 `33/33`；模板专项 `7/7`；LQE 评级边界 `13/13`；月度产能阈值 `6/6` 并通过跨月分摊、字数守恒和数据完整性用例；前端静态测试 13 个脚本。
 
 ## 后续重点
 

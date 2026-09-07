@@ -1,8 +1,9 @@
-"""首次启动写入的示例数据（库空时才写）。"""
+"""示例数据仅在空库且显式启用 SEED_DEMO_DATA 时写入。"""
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from .db import engine
+from .config import SEED_DEMO_DATA
 from .models import (PO, Complaint, Contract, LanguagePair,
                      PaymentAccount, PaymentInfo, ProjectPrice, QualityScore,
                      RateChange, Translator,
@@ -17,6 +18,8 @@ def seed():
             for tid in s.scalars(select(Translator.id)).all():
                 resync_quality_summary(s, tid)
             s.commit()
+            return
+        if not SEED_DEMO_DATA:
             return
         ts = [
             Translator(name="张明", wechat="zhangming_wx", email="zm@example.com",

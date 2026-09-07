@@ -10,7 +10,7 @@ from pathlib import Path
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, UploadFile
-from fastapi.responses import StreamingResponse
+from fastapi.responses import FileResponse, StreamingResponse
 from pydantic import ValidationError
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
@@ -53,18 +53,20 @@ IMPORT_FIELDS = [
     ("姓名", "name", True, None),
     ("母语", "native_language", True, None),
     ("入库日期", "onboarding_date", True, None),
+    ("性别", "gender", True, ["男", "女"]),
     ("邮箱", "email", False, None),
     ("微信", "wechat", False, None),
     ("所在地", "location", False, None),
     ("时区", "timezone", False, None),
     ("状态", "status", False, ["Active", "Dormant", "Blacklisted", "Probation"]),
     ("来源", "source", False, None),
-    ("性别", "gender", True, ["男", "女"]),
     ("主体类型", "entity_type", False, ["个人译员", "供应商"]),
     ("语言对", "language_pairs", False, None),
     ("擅长领域", "domains", False, None),
     ("文本类型", "text_types", False, None),
     ("CAT工具", "cat_tools", False, None),
+    ("人工评级", "manual_rating", False, ["S", "A", "A-", "B", "C", "D"]),
+    ("人工评级原因", "manual_rating_reason", False, None),
     ("试译结果", "trial_result", False, ["Pass", "Fail", "Pending"]),
     ("当前项目", "current_project", False, None),
     ("角色", "role", False, ["翻译", "审校", "MTPE", "LQA", "LQE", "一口价", "其他"]),
@@ -91,6 +93,7 @@ _HEADER_MAP.update({
     "ID": "id",
     "译员ID": "id",
     "译员id": "id",
+    "CAT 工具": "cat_tools",
 })
 _BOOL_FIELDS = {"nda_signed"}
 _DATE_FIELDS = {
@@ -107,6 +110,10 @@ _ENUM_ALIASES = {
     "entity_type": {
         "个人": "individual", "个人译员": "individual", "individual": "individual",
         "供应商": "vendor", "vendor": "vendor",
+    },
+    "settlement_mode": {
+        "月结": "monthly", "monthly": "monthly",
+        "累计结": "cumulative", "cumulative": "cumulative",
     },
 }
 _PROJECT_HEADER_MAP = {
@@ -866,6 +873,16 @@ def list_audit(who: str = Depends(require_editor)):
 
 
 # ---------------- 导入导出 ----------------
+@router.get("/export/translator-template")
+def export_translator_template():
+    return FileResponse(
+        Path(__file__).resolve().parents[1] / "templates" / "translator_import_template.xlsx",
+        filename="译员导入模板.xlsx",
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Cache-Control": "no-store", "X-Content-Type-Options": "nosniff"},
+    )
+
+
 @router.get("/export/translators")
 def export_translators():
     from openpyxl import Workbook
@@ -962,7 +979,7 @@ def import_translators(file: UploadFile, who: str = Depends(require_editor)):
     from openpyxl import load_workbook
 
     wb = load_workbook(io.BytesIO(file.file.read()))
-    ws = wb.active
+    ws = next((wb[name] for name in ("译员导入", "译员") if name in wb.sheetnames), wb.active)
     rows = list(ws.iter_rows(values_only=True))
     if not rows:
         return {"imported": 0, "updated": 0}

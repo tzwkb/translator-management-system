@@ -10,6 +10,9 @@ from fastapi.responses import FileResponse
 from . import config
 from .routers import router
 from .seed import seed
+from .intake.admin import router as intake_admin_router
+from .intake.public import router as intake_public_router
+from .intake.http import configure_public_http
 
 
 @asynccontextmanager
@@ -20,6 +23,15 @@ async def lifespan(_app):
 
 app = FastAPI(title="译员管理系统", lifespan=lifespan)
 app.include_router(router)
+app.include_router(intake_admin_router)
+app.include_router(intake_public_router)
+configure_public_http(app)
+
+
+@app.get("/intake-admin.js", include_in_schema=False)
+def intake_admin_script():
+    return FileResponse(config.FRONTEND_DIR / "intake" / "admin.js",
+                        media_type="text/javascript", headers={"Cache-Control": "no-store"})
 
 
 @app.get("/")

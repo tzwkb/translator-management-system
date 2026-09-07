@@ -150,6 +150,37 @@ class Translator(Base):
         }
 
 
+class TranslatorIntakeInvite(Base):
+    __tablename__ = "translator_intake_invites"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    token_hash: Mapped[str] = mapped_column(String(64), unique=True)
+    email: Mapped[str] = mapped_column(String(200), index=True)
+    translator_id: Mapped[Optional[int]] = mapped_column(ForeignKey("translators.id"))
+    created_by: Mapped[str] = mapped_column(String(100))
+    created_at: Mapped[datetime] = mapped_column(DateTime)
+    expires_at: Mapped[datetime] = mapped_column(DateTime)
+    revoked_at: Mapped[Optional[datetime]] = mapped_column(DateTime)
+    revision: Mapped[int] = mapped_column(Integer, default=0)
+
+
+class TranslatorIntakeSubmission(Base):
+    __tablename__ = "translator_intake_submissions"
+    __table_args__ = (
+        CheckConstraint("status IN ('pending', 'needs_info', 'approved', 'rejected')",
+                        name="ck_translator_intake_submissions_status"),
+    )
+    id: Mapped[int] = mapped_column(primary_key=True)
+    invite_id: Mapped[int] = mapped_column(ForeignKey("translator_intake_invites.id"), unique=True)
+    status: Mapped[str] = mapped_column(String(20), index=True)
+    version: Mapped[int] = mapped_column(Integer, default=1)
+    payload: Mapped[str] = mapped_column(Text)
+    submitted_at: Mapped[datetime] = mapped_column(DateTime)
+    reviewed_at: Mapped[Optional[datetime]] = mapped_column(DateTime)
+    reviewed_by: Mapped[Optional[str]] = mapped_column(String(100))
+    review_note: Mapped[Optional[str]] = mapped_column(Text)
+    translator_id: Mapped[Optional[int]] = mapped_column(ForeignKey("translators.id"))
+
+
 class TranslatorAlias(Base):
     __tablename__ = "translator_aliases"
     __table_args__ = (
