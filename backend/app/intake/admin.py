@@ -31,7 +31,7 @@ def create_invite(body: InviteIn, request: Request, who=Depends(require_editor))
     if base:
         parsed = urlsplit(base)
         local = parsed.hostname in {"localhost", "127.0.0.1", "::1"}
-        if not parsed.hostname or parsed.username or parsed.password or parsed.query or parsed.fragment or parsed.path or (
+        if not parsed.hostname or parsed.username or parsed.password or parsed.query or parsed.fragment or (
             parsed.scheme != "https" and not (local and parsed.scheme == "http")
         ):
             raise HTTPException(503, "INTAKE_PUBLIC_BASE_URL 应为 HTTPS 站点地址（本机预览可用 HTTP）")
