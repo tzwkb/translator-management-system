@@ -10,6 +10,12 @@ class IntakeModel(BaseModel):
     model_config = ConfigDict(extra="forbid", str_strip_whitespace=True, allow_inf_nan=False)
 
 
+def normalize_email(value):
+    if not EMAIL_RE.fullmatch(value):
+        raise ValueError("邮箱格式无效 / Invalid email address")
+    return value.lower()
+
+
 class InviteIn(IntakeModel):
     email: str = Field(min_length=3, max_length=200)
     translator_id: int | None = Field(default=None, gt=0)
@@ -18,9 +24,7 @@ class InviteIn(IntakeModel):
     @field_validator("email")
     @classmethod
     def valid_email(cls, value):
-        if not EMAIL_RE.fullmatch(value):
-            raise ValueError("邮箱格式无效 / Invalid email address")
-        return value.lower()
+        return normalize_email(value)
 
 
 Rate = Annotated[float, Field(ge=0, le=99999999.99)]
@@ -99,7 +103,10 @@ class IntakeIn(IntakeModel):
     projects: list[IntakeProject] = Field(default_factory=list, max_length=30)
     consent: Literal[True]
 
-    _email = field_validator("email")(InviteIn.valid_email)
+    @field_validator("email")
+    @classmethod
+    def valid_email(cls, value):
+        return normalize_email(value)
 
     @field_validator("wechat", "location", "timezone", "domains", "text_types", "cat_tools", "remarks", mode="before")
     @classmethod
