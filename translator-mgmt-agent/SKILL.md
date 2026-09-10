@@ -13,7 +13,7 @@ SKILL=/Users/spellbook/Desktop/Langlobal/译员管理系统/translator-mgmt-agen
 ```
 
 ## 前置
-- 系统在跑（默认 `http://127.0.0.1:8000`；上服务器后改 `client.py` 里的 BASE）。
+- 目标地址由环境变量 `TRANSLATOR_API_BASE` 决定，默认本机 `http://127.0.0.1:8000`。访问线上时另设 `TRANSLATOR_GATE_USER` / `TRANSLATOR_GATE_PASS`（网关 HTTP Basic）；应用令牌走 `X-Trans-Token` 头，与网关的 `Authorization` 头互不干扰。
 - 读消息用 wechat / wecom MCP（底层是本仓的 wechat-decrypt 解密）。
 - 写系统用 `client.py`，它以 **资源端Agent** 身份登录拿 token。
 - 语言代码必须来自系统固定选项；用 `Client().language_options()` 或 `/api/language-pair-options` 查。
@@ -22,12 +22,12 @@ SKILL=/Users/spellbook/Desktop/Langlobal/译员管理系统/translator-mgmt-agen
 
 1. **读消息**：`wechat_recent_messages` 或 `wecom_search`，圈定译员相关的会话/群。
 2. **抽取**（人来判断，别硬套）：
-   - 档期/产能——「这周满了」「下周才有空」「烟云占到第三周」→ 占用百分比。
+   - 产能——「这周满了」「下周才有空」「烟云占到第三周」→ 对应月份的产能状态（空闲/健康/饱和/警告）+ 原因文字。
    - 报价谈判——「ZH→KO 翻译涨到 X」「同意按 X 算」→ 语言对 + 任务类型 + 新费率。
    - PO/结算线索——某人某月做了多少字 → PO；`word_count` 传实际字数，不传“千字数”。
    - 新译员、客诉——陌生人发资料、客户投诉。
 3. **写系统**（用 `client.py`，见下）：
-   - 档期 → `set_capacity(...)`，**直接生效**。
+   - 产能 → `set_capacity(tid, "YYYY-MM", 状态, 原因)`，**直接生效**（整月粒度，覆盖该月旧值）。
    - 费率 → `propose_rate(..., source_lang="ZH", target_lang="KO", ...)`，先 `dry_run=True` 校验，再用同一幂等键正式提交待审。
    - PO / PO 状态 → `propose_po(...)` / `propose_po_status(...)`，同样先预演再提交；PO 有语言对费率时可省略 `rate`。
    - 新译员 / 客诉 / 改译员资料 → **agent 没权限直接写**（系统返 403），列出来交资源端处理，别绕。
@@ -36,6 +36,7 @@ SKILL=/Users/spellbook/Desktop/Langlobal/译员管理系统/translator-mgmt-agen
 ## 护栏（必须守）
 - **钱相关只提建议。** propose_rate/propose_po 返回 `{"pending": true}` 是正常的，别想办法绕过让它直接落。
 - **钱相关先预演。** 首次调用传 `dry_run=True`；预演结果确认字段无误后，再用相同 `idempotency_key` 正式提交。
+- **产能是整月粒度。** `set_capacity` 会覆盖该译员该月的旧值，一个月只能有一个状态。消息里说的是"某周"时，据此判断整月状态并把周的信息写进原因，不要试图按周写。
 - **幂等键来自消息。** 格式使用 `<来源>:<会话ID>:<消息ID>:<操作类型>`；同一消息产生多种操作时用 `rate`、`po`、`po-status` 区分。没有稳定消息 ID 时省略，交由后端内容指纹防重。
 - **费率必须优先分语言对。** 不要只报一组“默认费率”；消息里有 ZH→KO、中文到韩语、英日等信息时，必须拆成 `source_lang` 和 `target_lang`。
 - **语言对不是自由文本。** 每一边从固定语言代码里选，但两边可以自由组合；不确定代码时查 `language_options()`，仍不确定就列入人工核实。
@@ -51,7 +52,7 @@ import sys; sys.path.insert(0, "/Users/spellbook/Desktop/Langlobal/译员管理�
 from client import Client
 c = Client()                                  # 以 资源端Agent 登录
 zhang = c.find("张明")                         # 按名字找译员
-c.set_capacity(zhang["id"], 2026, 6, 4, "烟云", 100)        # 档期，直接生效
+c.set_capacity(zhang["id"], "2026-06", "饱和", "微信：烟云第 3 周排满")   # 产能，整月，直接生效
 r = c.propose_rate(
     zhang["id"], "翻译", 200,
     source_lang="ZH", target_lang="KO", currency="CNY",

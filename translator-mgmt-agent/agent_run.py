@@ -10,15 +10,15 @@ import urllib.error
 import urllib.request
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from client import BASE, Client  # noqa: E402
+from client import BASE, Client, gateway_headers  # noqa: E402
 
 _OP = urllib.request.build_opener(urllib.request.ProxyHandler({}))
 
 
 def ed(m, p, body=None, token=None):
-    h = {}
+    h = dict(gateway_headers())
     if token:
-        h["Authorization"] = "Bearer " + token
+        h["X-Trans-Token"] = "Bearer " + token
     data = None
     if body is not None:
         data = json.dumps(body).encode()
@@ -47,9 +47,9 @@ for who, text in msgs:
 
     if who == "张明":
         z = c.find("张明")
-        c.set_capacity(z["id"], 2026, 6, 3, "烟云", 100)
-        msg = "→ 档期：2026-06 第3周 烟云 占用100% —— 直接落库"
-        direct.append("张明 2026-06 W3 烟云 占用100%")
+        c.set_capacity(z["id"], "2026-06", "饱和", "微信：烟云第 3 周排满，第 4 周才有空")
+        msg = "→ 产能：2026-06 标为饱和，原因来自微信 —— 直接落库"
+        direct.append("张明 2026-06 饱和（烟云第 3 周排满）")
 
     elif who == "李娜":
         l = c.find("李娜")

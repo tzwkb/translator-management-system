@@ -1,24 +1,40 @@
 """译员管理系统 API 客户端（给 agent skill 用）。
 
 以 资源端Agent 身份登录，封装常用写操作：
-- 档期 set_capacity 直接生效；
+- 产能覆盖 set_capacity 按月设置状态与原因，直接生效；
 - 费率 propose_rate / PO propose_po 进待审队列（系统返回 {"pending": True}）；
 - 费率和 PO 尽量带 source_lang/target_lang，避免回到旧的统一费率口径。
-绕过本机 Clash 代理直连 localhost。上服务器后改 BASE 即可。
+
+目标地址由环境变量 TRANSLATOR_API_BASE 决定，默认本机 http://127.0.0.1:8000。
+访问经网关（HTTP Basic）保护的线上地址时，设置 TRANSLATOR_GATE_USER / TRANSLATOR_GATE_PASS；
+应用自身的角色令牌走 X-Trans-Token 头，与网关的 Authorization 头互不干扰。
+绕开本机代理直连。
 """
+import base64
 import datetime
 import json
 import os
+import urllib.parse
 import urllib.request
 
 BASE = os.environ.get("TRANSLATOR_API_BASE", "http://127.0.0.1:8000")
+GATE_USER = os.environ.get("TRANSLATOR_GATE_USER")
+GATE_PASS = os.environ.get("TRANSLATOR_GATE_PASS")
 _OP = urllib.request.build_opener(urllib.request.ProxyHandler({}))  # 绕代理
+
+
+def gateway_headers():
+    if GATE_USER and GATE_PASS:
+        raw = f"{GATE_USER}:{GATE_PASS}".encode()
+        return {"Authorization": "Basic " + base64.b64encode(raw).decode()}
+    return {}
 
 
 def _req(method, path, body=None, token=None, headers=None):
     headers = dict(headers or {})
+    headers.update(gateway_headers())
     if token:
-        headers["Authorization"] = "Bearer " + token
+        headers["X-Trans-Token"] = "Bearer " + token
     data = None
     if body is not None:
         data = json.dumps(body).encode()
@@ -69,10 +85,14 @@ class Client:
         return None
 
     # ---- 写：低风险，直接生效 ----
-    def set_capacity(self, tid, year, month, week, project, occupancy_pct):
-        return _req("POST", f"/api/translators/{tid}/capacity",
-                    {"period_year": year, "period_month": month, "week_no": week,
-                     "project": project, "occupancy_pct": occupancy_pct}, self.token)
+    def set_capacity(self, tid, month, status, reason):
+        """按月设置产能覆盖，直接生效。
+
+        month 用 YYYY-MM；status 取 空闲 / 健康 / 饱和 / 警告。
+        """
+        return _req("PUT", f"/api/translators/{tid}/capacity/override"
+                          f"?month={urllib.parse.quote(str(month))}",
+                    {"status": status, "reason": reason}, self.token)
 
     # ---- 写：钱相关，进待审（返回 {"pending": True, ...}）----
     def propose_rate(self, tid, task_type, new_rate, reason=None, negotiator=None, change_date=None,
