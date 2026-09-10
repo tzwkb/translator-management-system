@@ -76,28 +76,29 @@ def parse_token(tok):
     return role, name
 
 
-def _tok(authorization):
-    if not authorization:
+def _tok(authorization, x_trans_token=None):
+    raw = x_trans_token or authorization
+    if not raw:
         return None
-    return authorization.split(" ", 1)[1] if " " in authorization else authorization
+    return raw.split(" ", 1)[1] if " " in raw else raw
 
 
-def require_editor(authorization: str = Header(None)):
-    role, name = parse_token(_tok(authorization))
+def require_editor(authorization: str = Header(None), x_trans_token: str = Header(None)):
+    role, name = parse_token(_tok(authorization, x_trans_token))
     if role != "editor":
         raise HTTPException(403, "只读视角无编辑权限")
     return name
 
 
-def require_writer(authorization: str = Header(None)):
-    role, name = parse_token(_tok(authorization))
+def require_writer(authorization: str = Header(None), x_trans_token: str = Header(None)):
+    role, name = parse_token(_tok(authorization, x_trans_token))
     if role not in ("editor", "agent"):
         raise HTTPException(403, "无编辑权限")
     return role, name
 
 
-def require_authenticated(authorization: str = Header(None)):
-    role, name = parse_token(_tok(authorization))
+def require_authenticated(authorization: str = Header(None), x_trans_token: str = Header(None)):
+    role, name = parse_token(_tok(authorization, x_trans_token))
     if role not in ("editor", "agent", "viewer"):
         raise HTTPException(403, "需要登录")
     return role, name

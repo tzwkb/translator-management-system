@@ -1089,7 +1089,7 @@ function showToast(msg, type){
 async function api(method, path, body) {
   const opt = {method, headers:{}};
   if (body !== undefined) { opt.headers["Content-Type"]="application/json"; opt.body=JSON.stringify(body); }
-  if (TOKEN) opt.headers["Authorization"] = "Bearer " + TOKEN;
+  if (TOKEN) opt.headers["X-Trans-Token"] = "Bearer " + TOKEN;
   const r = await fetch(path, opt);
   if (r.status === 403) { showToast("只读视角，无编辑权限（后端已拦截）", "error"); throw new Error("403"); }
   if (!r.ok) { showToast("操作失败：" + (await r.text()), "error"); throw new Error(r.status); }
@@ -1097,7 +1097,7 @@ async function api(method, path, body) {
   return ct.includes("json") ? r.json() : r;
 }
 async function apiForm(method, path, formData) {
-  const r = await fetch(path, {method, headers:TOKEN?{"Authorization":"Bearer "+TOKEN}:{}, body:formData});
+  const r = await fetch(path, {method, headers:TOKEN?{"X-Trans-Token":"Bearer "+TOKEN}:{}, body:formData});
   let data = {};
   try { data = await r.json(); } catch(e) {}
   if (r.status===403) { showToast("无操作权限", "error"); throw new Error("403"); }
@@ -1105,7 +1105,7 @@ async function apiForm(method, path, formData) {
   return data;
 }
 async function downloadAuth(path, filename) {
-  const r = await fetch(path, {headers:TOKEN?{"Authorization":"Bearer "+TOKEN}:{}});
+  const r = await fetch(path, {headers:TOKEN?{"X-Trans-Token":"Bearer "+TOKEN}:{}});
   if (!r.ok) { showToast("下载失败", "error"); return; }
   const blob = await r.blob(), url = URL.createObjectURL(blob), a = document.createElement("a");
   a.href = url; a.download = filename || "download"; a.click();
@@ -1497,7 +1497,7 @@ function downloadTranslatorTemplate(){ window.location = "/api/export/translator
 async function importTr(input) {
   const f = input.files[0]; input.value=""; if (!f) return;
   const fd = new FormData(); fd.append("file", f);
-  const r = await fetch("/api/import/translators", {method:"POST", headers:{"Authorization":"Bearer "+TOKEN}, body:fd});
+  const r = await fetch("/api/import/translators", {method:"POST", headers:{"X-Trans-Token":"Bearer "+TOKEN}, body:fd});
   if (r.status===403) { showToast("只读视角，无导入权限", "error"); return; }
   if (!r.ok) { showToast("导入失败", "error"); return; }
   const d = await r.json();
@@ -1513,7 +1513,7 @@ async function importTr(input) {
 async function importLQE(input) {
   const f=input.files[0]; input.value=""; if(!f) return;
   const fd=new FormData(); fd.append("file", f);
-  const r=await fetch("/api/import/lqe",{method:"POST",headers:{"Authorization":"Bearer "+TOKEN},body:fd});
+  const r=await fetch("/api/import/lqe",{method:"POST",headers:{"X-Trans-Token":"Bearer "+TOKEN},body:fd});
   if(r.status===403){showToast("只读视角，无导入权限", "error");return;}
   if(!r.ok){showToast("导入失败："+(await r.text()), "error");return;}
   const d=await r.json();

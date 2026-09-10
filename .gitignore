@@ -37,3 +37,6 @@ docs/**/*.png
 .playwright-cli/
 output/
 outputs/
+
+# Runtime stamp written by backend/start.sh
+data/.requirements.sha256

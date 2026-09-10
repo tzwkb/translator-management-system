@@ -10,7 +10,7 @@ function intakeValue(value,field){
   const map=labels[field];return esc(map&&Object.hasOwn(map,value)?map[value]:value??"—");
 }
 async function intakeRequest(method,path,body){
-  const response=await fetch(`/api/intake${path}`,{method,cache:"no-store",headers:{Authorization:`Bearer ${TOKEN}`,"Content-Type":"application/json"},...(body?{body:JSON.stringify(body)}:{})});
+  const response=await fetch(`/api/intake${path}`,{method,cache:"no-store",headers:{"X-Trans-Token":`Bearer ${TOKEN}`,"Content-Type":"application/json"},...(body?{body:JSON.stringify(body)}:{})});
   const result=await response.json();
   if(!response.ok){const message=Array.isArray(result.detail)?result.detail.map(e=>e.msg).join("；"):result.detail||"请求失败";showToast(message,"error");throw new Error(message);}
   return result;
